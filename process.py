@@ -26,3 +26,26 @@ with open('data.csv',newline="") as csvfile:
             protein_dict[row['Protein Construct']][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(row['A280_48-72hr']))
 
 print(protein_dict)
+
+def statisticize(protein_construct,test):
+    """
+    protein_construct is the dictionary key that refers to the particular protein construct of interest.
+    test is the type of test you performed, or the column name in the csv. Ie.: 'A400', 'A280_1hr'
+    """
+    test_groups = {}
+    for bio_rep in protein_construct:
+        if len(bio_rep[test])!=0:
+            test_groups[bio_rep] = bio_rep[test]
+    #if :
+        #do ANOVA
+    #    pass
+    #elif :
+        #do a t-test
+        pass
+    else:
+        print(f'Only one biological replicate was performed on {protein_construct}. More are needed to make any statistical inferences.')
+
+for protein_construct in protein_dict:
+    statisticize(protein_construct,'A400')
+    statisticize(protein_construct,'A280_1hr')
+    statisticize(protein_construct,'A280_48-72hr')
