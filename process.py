@@ -1,4 +1,5 @@
 import csv
+from scipy import stats
 
 #ANOVA must be performed on all groupings of data where there are 3 or more samples, and when it shows that there is a significant difference in means,
 #paired T-tests must be performed to see which samples are significantly different.
@@ -25,27 +26,74 @@ with open('data.csv',newline="") as csvfile:
         if row['A280_48-72hr']!="":
             protein_dict[row['Protein Construct']][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(row['A280_48-72hr']))
 
-print(protein_dict)
+#print(protein_dict)
 
-def statisticize(protein_construct,test):
+def statisticize(test,protein_construct,protein_construct2=None):
+    passed_data = {'date':[],'pH':[],test:[]}
+    data_and_stat = {'date':[],'pH':[],test:[],'passed':[]}
     """
+    test is the type of test you performed, referred to by the variable being measured, or the column name in the csv. Ie.: 'A400', 'A280_1hr'
     protein_construct is the dictionary key that refers to the particular protein construct of interest.
-    test is the type of test you performed, or the column name in the csv. Ie.: 'A400', 'A280_1hr'
+    protein_construct2 is an optional second protein construct that you want to compare to the first one.
+    So, yes, you do need to run this function once for each type of protein construct and variable combination.
     """
-    test_groups = {}
-    for bio_rep in protein_construct:
-        if len(bio_rep[test])!=0:
-            test_groups[bio_rep] = bio_rep[test]
-    #if :
-        #do ANOVA
-    #    pass
-    #elif :
-        #do a t-test
-        pass
-    else:
-        print(f'Only one biological replicate was performed on {protein_construct}. More are needed to make any statistical inferences.')
+    if protein_construct2==None:
+        data = {'date':[],'pH':[],test:[]}
+        dates = []
+        pHs = []
+        for bio_rep in protein_dict[protein_construct]:
+            if len(protein_dict[protein_construct][bio_rep][test])!=0:
+                #if the biological replicate actually had this test done, aggregate its data into the temporary dataframe replicate by replicate, conserving their order.
+                for replicate in protein_dict[protein_construct][bio_rep][test]:
+                    date = bio_rep.split("_")[0]
+                    if date not in data['date']:
+                        dates.append(date)
+                    data['date'].append(bio_rep.split("_")[0])
+                    pH = bio_rep.split("_")[-1]
+                    if pH not in data['pH']:
+                        pHs.append(pH)
+                    data['pH'].append(pH)
+                    data[test].append(replicate)
+        #do ANOVA on each set of pH values.
+        if len(dates)>1:
+            for pH in pHs:
+                #For each pH, make a temporary dictionary that splits the replicates by biological replicate.
+                pH_date_dict = {}
+                for replicate in range(len(data['pH'])):
+                    if data['pH'][replicate] == pH:
+                        date = data['date'][replicate]
+                        if date in pH_date_dict:
+                            pH_date_dict[date].append(data[test][replicate])
+                        else:
+                            pH_date_dict[date] = [data[test][replicate]]
+                #print(pH_date_dict)
+                pH_ANOVA = stats.f_oneway(*pH_date_dict.values(),equal_var=False)
+                if pH_ANOVA.pvalue>=0.05:
+                    print(f'ANOVA statistics for {protein_construct} {test} at pH {pH}: {pH_ANOVA}')
+                    for date in pH_date_dict:
+                        for replicate in pH_date_dict[date]:
+                            passed_data['date'].append(date)
+                            passed_data['pH'].append(pH)
+                            passed_data[test].append(replicate)
+
+                            data_and_stat['date'].append(date)
+                            data_and_stat['pH'].append(pH)
+                            data_and_stat[test].append(replicate)
+                            data_and_stat['passed'].append(True)
+                else:
+                    data_and_stat['date'].append(date)
+                    data_and_stat['pH'].append(pH)
+                    data_and_stat[test].append(replicate)
+                    data_and_stat['passed'].append(False)
+
+            # return passed_data, data_and_stat OR create the charts needed within this function itself (which is what I would suggest)
+            #ELI, I CALL ON YOU TO FULFILL YOUR OATHS
+
+        else:
+            print(f'There was only one replicate performed for {protein_construct} {test}.')
 
 for protein_construct in protein_dict:
-    statisticize(protein_construct,'A400')
-    statisticize(protein_construct,'A280_1hr')
-    statisticize(protein_construct,'A280_48-72hr')
+    statisticize('A400',protein_construct)
+    statisticize('A280_1hr',protein_construct)
+    statisticize('A280_48-72hr',protein_construct)
+
