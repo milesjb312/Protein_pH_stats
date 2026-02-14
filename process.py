@@ -77,8 +77,8 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
     #protein constructs and tests passed into this function.
     #This could probably be done initially, but I can't figure it out.
 
-    #This dictionary will later be populated with the filtered datasets, separated by the variable of interest.
-    pH_dict = {}
+    #This dictionary will later be populated with the filtered datasets, separated by date or by an averaged grouping of some variable of interest.
+    grouped_dict = {}
 
     pHs = []
     pH_values = []
@@ -118,61 +118,57 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
                         else:
                             voi_dict[voi] = [max(data['data'][replicate],0.0)]
                         #populate the returned dictionary
-                        if voi in pH_dict:
-                            if pH in pH_dict[voi]:
-                                pH_dict[voi][pH].append(max(data['data'][replicate],0.0))
+                        if voi in grouped_dict:
+                            if pH in grouped_dict[voi]:
+                                grouped_dict[voi][pH].append(max(data['data'][replicate],0.0))
                             else:
-                                pH_dict[voi][pH] = [max(data['data'][replicate],0.0)]
+                                grouped_dict[voi][pH] = [max(data['data'][replicate],0.0)]
                         else:
-                            pH_dict[voi] = {pH:[max(data['data'][replicate],0.0)]}
+                            grouped_dict[voi] = {pH:[max(data['data'][replicate],0.0)]}
+
+                #Generate confidence intervals here...
+                pH_date_ANOVA = stats.f_oneway(*voi_dict.values(),equal_var=False)
+                print(pH_date_ANOVA)
+                #ANOVA over only 2 groups lends a p-value that is essentially the same as that for the t-test. Un-comment the next line for proof.
+                #print(pH_ANOVA.pvalue,stats.ttest_ind(*voi_dict.values(), equal_var=False).pvalue)
+                #print(f'ANOVA done on {protein_constructs} at pH {pH} data from {tests} assay(s).')
+                #if pH_ANOVA.pvalue>0.05:
+                #print({pH_ANOVA})
+
+                #Generate a boxplot
+                if boxplot==True:
+                    labels = voi_dict.keys()
+                    plot = plt.boxplot(voi_dict.values(),tick_labels=labels,showmeans=True)
+                    if len(proteins_and_tests)==1:
+                        plt.title(f'{protein_constructs[0]} {tests[0]} at pH {pH}')
+                        plt.ylabel(tests[0])
+                    else:
+                        #If two different protein constructs were passed in, we want to show that they are the same. This is usually testing single vs. double trigger variants.
+                        #For this test, we aggregate the biological replicates of a given protein construct whether or not they are statistically significantly different.
+                        if len(protein_constructs)==2 and len(tests)==1:
+                            plt.title(f'{protein_constructs[0]} vs. {protein_constructs[1]} {tests[0]} at pH {pH}')
+                            plt.ylabel(tests[0])
+                        #If the same protein construct was passed in twice with two different tests, we want to show that they are the same.
+                        elif len(protein_constructs)==1 and len(tests)==2:
+                            plt.title(f'{protein_constructs[0]} {tests[0]} vs. {tests[1]} at pH {pH}')
+                            plt.ylabel(tests[0])
+                    plt.show()
 
         #If you don't want to average the replicates:
         else:
-            print(f'data: {data}')
             for pH in pHs:
                 for replicate in range(len(data['data'])):
                     if pH == data['pH'][replicate]:
-                        date = data['date'][replicate]
-                        if date in pH_dict:
-                            if pH in pH_dict[date]:
-                                pH_dict[date][pH].append(max(data['data'][replicate],0.0))
+                        construct_and_date = data['protein construct'][replicate]+"_"+data['date'][replicate]
+                        if construct_and_date in grouped_dict:
+                            if pH in grouped_dict[construct_and_date]:
+                                grouped_dict[construct_and_date][pH].append(max(data['data'][replicate],0.0))
                             else:
-                                pH_dict[date][pH] = [max(data['data'][replicate],0.0)]
+                                grouped_dict[construct_and_date][pH] = [max(data['data'][replicate],0.0)]
                         else:
-                            pH_dict[date] = {pH:[max(data['data'][replicate],0.0)]}
+                            grouped_dict[construct_and_date] = {pH:[max(data['data'][replicate],0.0)]}
 
     group(average)
-
-    #print(voi_dict)
-    if len(pH_dict)>1:
-        #Generate confidence intervals here...
-        #ANOVA over only 2 groups lends a p-value that is essentially the same as that for the t-test. Un-comment the next line for proof.
-        #print(pH_ANOVA.pvalue,stats.ttest_ind(*voi_dict.values(), equal_var=False).pvalue)
-        pH_ANOVA = stats.f_oneway(*pH_dict.values(),equal_var=False)
-        #print(f'ANOVA done on {protein_constructs} at pH {pH} data from {tests} assay(s).')
-        #if pH_ANOVA.pvalue>0.05:
-        #print({pH_ANOVA})
-                
-    #Generate a boxplot
-    if boxplot==True:
-        labels = pH_dict.keys()
-        plt.title(f'pH {pH}')
-        plt.boxplot(pH_dict.values(),tick_labels=labels,showmeans=True)
-    if len(proteins_and_tests)==1:
-        plt.title(f'{protein_constructs[0]} {tests[0]}')
-        plt.ylabel(tests[0])
-    else:
-        #If two different protein constructs were passed in, we want to show that they are the same. This is usually testing single vs. double trigger variants.
-        #For this test, we aggregate the biological replicates of a given protein construct whether or not they are statistically significantly different.
-        if len(protein_constructs)==2 and len(tests)==1:
-            plt.title(f'{protein_constructs[0]} vs. {protein_constructs[1]} {tests[0]}')
-            plt.ylabel(tests[0])
-        #If the same protein construct was passed in twice with two different tests, we want to show that they are the same.
-        elif len(protein_constructs)==1 and len(tests)==2:
-            plt.title(f'{protein_constructs[0]} {tests[0]} vs. {tests[1]}')
-            plt.ylabel(tests[0])
-    plt.legend(handles,labels)
-    plt.show()
 
     def pH_to_absorbance_model_4pL_bump(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote,isoelectric_bump_height,isoelectric_point,isoelectric_bump_width):
         #This is the model that we're going to try to fit using scipy's curve_fit function.
@@ -186,37 +182,60 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
     if plot==True:
         handles = []
         labels = []
-        for voi in pH_dict:
-            means = []
-            for pH in pH_dict[voi]:
-                mean = sum(pH_dict[voi][pH])/len(pH_dict[voi][pH])
-                means.append(mean)
-            #initial_guesses = [max(means),-3,5.5,min(means),0.1,6.5,0.5]
-            initial_guesses = [max(means),-3,5.5,min(means)]
-            best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,means,p0=initial_guesses)
-            #print(best_fit_parameters)
-            plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters))
-            handles.append(plot[0])
-            labels.append(voi)
-    if len(proteins_and_tests)==1:
-        plt.title(f'{protein_constructs[0]} {tests[0]}')
-        plt.ylabel(tests[0])
-    else:
-        #If two different protein constructs were passed in, we want to show that they are the same. This is usually testing single vs. double trigger variants.
-        #For this test, we aggregate the biological replicates of a given protein construct whether or not they are statistically significantly different.
-        if len(protein_constructs)==2 and len(tests)==1:
-            plt.title(f'{protein_constructs[0]} vs. {protein_constructs[1]} {tests[0]}')
-            plt.ylabel(tests[0])
-        #If the same protein construct was passed in twice with two different tests, we want to show that they are the same.
-        elif len(protein_constructs)==1 and len(tests)==2:
-            plt.title(f'{protein_constructs[0]} {tests[0]} vs. {tests[1]}')
-            plt.ylabel(tests[0])
-    plt.legend(handles,labels)
-    plt.show()
+        for construct_and_date in grouped_dict:
+            try:
+                means = []
+                for pH in grouped_dict[construct_and_date]:
+                    mean = sum(grouped_dict[construct_and_date][pH])/len(grouped_dict[construct_and_date][pH])
+                    means.append(mean)
+                print(f'means: {means}')
+                #initial_guesses = [max(means),-3,5.5,min(means),0.1,6.5,0.5]
+                initial_guesses = [max(means),-3,5.5,min(means)]
+                best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,means,p0=initial_guesses)
+                #print(best_fit_parameters)
+                if "2Trig" in construct_and_date:
+                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--")
+                else:
+                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters))
+                handles.append(plot[0])
+                labels.append(construct_and_date)
+            except Exception as e:
+                print(f'The curve fit failed due to: {e}. Plotting points instead of fitted curve...')
+                construct_pHs = []
+                construct_data = []
+                for pH in grouped_dict[construct_and_date]:
+                    for replicate in grouped_dict[construct_and_date][pH]:
+                        construct_pHs.append(float(pH))
+                        construct_data.append(replicate)
+                plot = plt.scatter(construct_pHs,construct_data)
+                handles.append(plot)
+                labels.append(construct_and_date)
 
-#for protein_construct in protein_dict:
-    #statisticize([(protein_construct,'A400')])
-    #statisticize('A280_1hr',protein_construct)
-    #statisticize('A280_48-72hr',protein_construct)
+        if len(proteins_and_tests)==1:
+            plt.title(f'{protein_constructs[0]} {tests[0]}')
+            plt.ylabel(tests[0])
+        else:
+            #If two different protein constructs were passed in, we want to show that they are the same. This is usually testing single vs. double trigger variants.
+            #For this test, we aggregate the biological replicates of a given protein construct whether or not they are statistically significantly different.
+            if len(protein_constructs)==2 and len(tests)==1:
+                plt.title(f'{protein_constructs[0]} vs. {protein_constructs[1]} {tests[0]}')
+                plt.ylabel(tests[0])
+            #If the same protein construct was passed in twice with two different tests, we want to show that they are the same.
+            elif len(protein_constructs)==1 and len(tests)==2:
+                plt.title(f'{protein_constructs[0]} {tests[0]} vs. {tests[1]}')
+                plt.ylabel(tests[0])
+        plt.legend(handles,labels)
+        plt.show()
 
-statisticize([('1TEL-GG-TNK1.UBA','A400'),('2Trig-1TEL-GG-TNK1.UBA','A400')],boxplot=False,plot=True)
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,average=False)
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,average=True)
+
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,average=False)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,average=True)
+
+#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,average=False)
+#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,average=True)
