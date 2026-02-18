@@ -25,7 +25,7 @@ with open('data.csv',newline="") as csvfile:
         if row['A280_48-72hr']!="":
             protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(row['A280_48-72hr']))
 
-def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False):
+def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False):
     """
     Normally, you should pass only one test and one protein construct into 'proteins_and_tests', in the form of a list of tuples, where the
     tuple looks like: (protein_construct,test)
@@ -72,12 +72,11 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
                         data['data'].append(replicate/theoretical_max_concentration)
             else:
                 print(f'{protein_construct} on {bio_rep} has no {test} test data.')
-    #--------------------Now that the main filtering is done, it's time to do ANOVA on each set of pH values-------------------------------------------#
+    #--------------------Now that the main filtering is done, it's time to do ANOVA or Kruskal-Wallis on each set of pH values--------------------------------#
     #The first step is to further filter the data, moving it into dictionaries that denote the groups of interest. This is dependent on the number of
     #protein constructs and tests passed into this function.
-    #This could probably be done initially, but I can't figure it out.
 
-    #This dictionary will later be populated with the filtered datasets, separated by date or by an averaged grouping of some variable of interest.
+    #This dictionary will later be populated with the filtered datasets, separated by date or by a combined grouping of some variable of interest.
     grouped_dict = {}
 
     pHs = []
@@ -88,9 +87,9 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
             pH_values.append(float(pH))
     pH_linspace = np.linspace(min(pH_values),max(pH_values),400)
 
-    def group(average):
-        #If you want to average the replicates:
-        if average:
+    def group(combine):
+        #If you want to combine the replicates:
+        if combine:
             #If only one protein construct was passed in, then we want to show that the bio_reps were the same or different at any given pH. This part of the code
             #Is unnecessary for the purpose of generating charts, but the statistics must be reported for transparency.
             if len(proteins_and_tests)==1:
@@ -127,8 +126,10 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
                             grouped_dict[voi] = {pH:[max(data['data'][replicate],0.0)]}
 
                 #Generate confidence intervals here...
-                pH_date_ANOVA = stats.f_oneway(*voi_dict.values(),equal_var=False)
-                print(pH_date_ANOVA)
+                pH_date_kruskal = stats.kruskal(*voi_dict.values())
+                print(f'{pH}: {pH_date_kruskal}')
+                #pH_date_ANOVA = stats.f_oneway(*voi_dict.values(),equal_var=False)
+                #print(pH_date_ANOVA)
                 #ANOVA over only 2 groups lends a p-value that is essentially the same as that for the t-test. Un-comment the next line for proof.
                 #print(pH_ANOVA.pvalue,stats.ttest_ind(*voi_dict.values(), equal_var=False).pvalue)
                 #print(f'ANOVA done on {protein_constructs} at pH {pH} data from {tests} assay(s).')
@@ -154,7 +155,7 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
                             plt.ylabel(tests[0])
                     plt.show()
 
-        #If you don't want to average the replicates:
+        #If you don't want to combine the replicates:
         else:
             for pH in pHs:
                 for replicate in range(len(data['data'])):
@@ -168,13 +169,8 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
                         else:
                             grouped_dict[construct_and_date] = {pH:[max(data['data'][replicate],0.0)]}
 
-    group(average)
+    group(combine)
 
-    def pH_to_absorbance_model_4pL_bump(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote,isoelectric_bump_height,isoelectric_point,isoelectric_bump_width):
-        #This is the model that we're going to try to fit using scipy's curve_fit function.
-        logistic = lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
-        bump = isoelectric_bump_height * np.exp(-(pH - isoelectric_point)**2 / (2 * isoelectric_bump_width**2))
-        return logistic+bump
     def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
         #This is the model that we're going to try to fit using scipy's curve_fit function.
         return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
@@ -183,15 +179,28 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
         handles = []
         labels = []
         for construct_and_date in grouped_dict:
+            #Somewhere below this line, we need to be able to incorporate the Confidence Interval Band.
+            #Since we evaluate the 
+            """
+            plt.fill_between(
+                fitted_curve,
+                fitted_curve - lower_confidence_limit,
+                fitted_curve + upper_confidence_limit,
+                color=color_band,
+                alpha=0.45,
+                label="95% CI band",
+            )"""
             try:
-                means = []
+                medians = []
                 for pH in grouped_dict[construct_and_date]:
-                    mean = sum(grouped_dict[construct_and_date][pH])/len(grouped_dict[construct_and_date][pH])
-                    means.append(mean)
-                print(f'means: {means}')
-                #initial_guesses = [max(means),-3,5.5,min(means),0.1,6.5,0.5]
-                initial_guesses = [max(means),-3,5.5,min(means)]
-                best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,means,p0=initial_guesses)
+                    #mean = sum(grouped_dict[construct_and_date][pH])/len(grouped_dict[construct_and_date][pH])
+                    #means.append(mean)
+                    median = np.median(grouped_dict[construct_and_date][pH])
+                    medians.append(median)
+                print(f'medians: {medians}')
+                #stats.mannwhitneyu()
+                initial_guesses = [max(medians),-3,5.5,min(medians)]
+                best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,medians,p0=initial_guesses)
                 #print(best_fit_parameters)
                 if "2Trig" in construct_and_date:
                     plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--")
@@ -207,7 +216,10 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
                     for replicate in grouped_dict[construct_and_date][pH]:
                         construct_pHs.append(float(pH))
                         construct_data.append(replicate)
-                plot = plt.scatter(construct_pHs,construct_data)
+                if "2Trig" in construct_and_date:
+                    plot = plt.scatter(construct_pHs,construct_data,marker="^")
+                else:
+                    plot = plt.scatter(construct_pHs,construct_data)
                 handles.append(plot)
                 labels.append(construct_and_date)
 
@@ -229,13 +241,13 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,average=False)
 
 for protein_construct in protein_dict:
     if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,average=False)
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,average=True)
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False)
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=True)
 
 for protein_construct in protein_dict:
     if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,average=False)
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,average=True)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
 
-#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,average=False)
-#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,average=True)
+statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
+statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
