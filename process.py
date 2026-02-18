@@ -179,8 +179,12 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
         handles = []
         labels = []
         for construct_and_date in grouped_dict:
-            #Somewhere below this line, we need to be able to incorporate the Confidence Interval Band.
-            #Since we evaluate the 
+            #Somewhere below this line, we would incorporate the Confidence Interval Band.
+            #What would realistically be a 95% confidence interval here? We don't know the shape of the population, so we could assume a normal distribution,
+            #but it would be somewhat meaningless. If we did so, the confidence interval would be constructed using the standard error of either each
+            #biological replicate at a single pH or the combined biological replicates for a single construct at a single pH. Because the charts would be too
+            #messy with a CI band and 6 or more curves, I propose that we should only include them in the combined charts, and only if we feel it is entirely
+            #necessary.
             """
             plt.fill_between(
                 fitted_curve,
