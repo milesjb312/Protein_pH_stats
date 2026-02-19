@@ -179,8 +179,12 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
         handles = []
         labels = []
         for construct_and_date in grouped_dict:
-            #Somewhere below this line, we need to be able to incorporate the Confidence Interval Band.
-            #Since we evaluate the 
+            #Somewhere below this line, we would incorporate the Confidence Interval Band.
+            #What would realistically be a 95% confidence interval here? We don't know the shape of the population, so we could assume a normal distribution,
+            #but it would be somewhat meaningless. If we did so, the confidence interval would be constructed using the standard error of either each
+            #biological replicate at a single pH or the combined biological replicates for a single construct at a single pH. Because the charts would be too
+            #messy with a CI band and 6 or more curves, I propose that we should only include them in the combined charts, and only if we feel it is entirely
+            #necessary.
             """
             plt.fill_between(
                 fitted_curve,
@@ -190,6 +194,8 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                 alpha=0.45,
                 label="95% CI band",
             )"""
+            #HERE IS WHERE TO WORK NEXT! We have to make it so that all single-construct plots have both curves and scatter plots,
+            #And the two-construct plots have just curves, whenever possible.
             try:
                 medians = []
                 for pH in grouped_dict[construct_and_date]:
@@ -239,15 +245,16 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
         plt.legend(handles,labels)
         plt.show()
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False)
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=True)
+#for protein_construct in protein_dict:
+#    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+#        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False)
+#        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
+#for protein_construct in protein_dict:
+#    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+#        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
+#        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
 
-statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
-statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
+#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
+#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
+statisticize([('10xHis-1TEL-TV-vWA','A400')],plot=True,combine=False)
