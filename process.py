@@ -205,6 +205,10 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                 #stats.mannwhitneyu()
                 initial_guesses = [max(medians),-3,5.5,min(medians)]
                 best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,medians,p0=initial_guesses)
+                #print(f'best fit parameters for {construct_and_date}: {best_fit_parameters}')
+                #don't plot the curve_fit if the inflection point is below 4.0
+                if best_fit_parameters[2] < 4.0:
+                    raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct_and_date} below 4.0")
                 #print(best_fit_parameters)
                 if "2Trig" in construct_and_date:
                     plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--")
