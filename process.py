@@ -18,12 +18,25 @@ with open('data.csv',newline="") as csvfile:
             protein_dict[protein_construct] = {}
         if row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH'] not in protein_dict[protein_construct]:
             protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']] = {'A400':[],'A280_1hr':[],'A280_48-72hr':[]}
+        """
+        We need to make it so that if there is an asterisk that the code will not crash but instead store that number somewhere else so that it can be included in the plot
+        with an asterisk next to it signifying that it was not included into the curve fitting.
+        """
         if row['A400']!="":
-            protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A400'].append(float(row['A400']))
+            if '*' in row['A400']:
+                protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A400'].append((row['A400']))
+            else:
+                protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A400'].append(float(row['A400']))
         if row['A280_1hr']!="":
-            protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_1hr'].append(float(row['A280_1hr']))
+            if '*' in row['A280_1hr']:
+                protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_1hr'].append((row['A280_1hr']))
+            else:
+                protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_1hr'].append(float(row['A280_1hr']))
         if row['A280_48-72hr']!="":
-            protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(row['A280_48-72hr']))
+            if '*' in row['A280_48-72hr']:
+                protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append((row['A280_48-72hr']))
+            else:
+                protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(row['A280_48-72hr']))
 
 def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False):
     """
@@ -33,7 +46,7 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
     'tests' are the types of tests you performed, referred to by the variable being measured, or the column name in the csv. Ie.: 'A400', 'A280_1hr'    
     """
     #The first half of this function is just a filter pulling applicable data from the protein_dict dictionary.
-    data = {'protein construct':[],'date':[],'pH':[],'test':[],'data':[]}
+    data = {'protein construct':[],'date':[],'pH':[],'test':[],'data':[],'tailored_data':[]}
     protein_constructs = []
     tests = []
     for protein_construct,test in proteins_and_tests:
@@ -65,11 +78,23 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                     #molar absorptivity is, the denser the precipitate is. Essentially, the solubility and turbidity assays are testing entirely
                     #different things.
 
-                    if test in ['A280_1hr','A280_48-72hr']:
-                        #For precipitation assays, find the amount of protein left as a percentage.
-                        data['data'].append((theoretical_max_concentration-replicate)/theoretical_max_concentration)
+                    if type(replicate)==float:
+                        if test in ['A280_1hr','A280_48-72hr']:
+                            #For precipitation assays, find the amount of protein left as a percentage.
+                            data['tailored_data'].append((theoretical_max_concentration-replicate)/theoretical_max_concentration)
+                            data['data'].append((theoretical_max_concentration-replicate)/theoretical_max_concentration)
+                        else:
+                            data['tailored_data'].append(replicate/theoretical_max_concentration)
+                            data['data'].append(replicate/theoretical_max_concentration)
                     else:
-                        data['data'].append(replicate/theoretical_max_concentration)
+                        if test in ['A280_1hr','A280_48-72hr']:
+                            #For precipitation assays, find the amount of protein left as a percentage.
+                            data['data'].append((theoretical_max_concentration-float(replicate.strip("*")))/theoretical_max_concentration)
+                            data['tailored_data'].append('')
+                        else:
+                            data['data'].append(float(replicate.strip("*"))/theoretical_max_concentration)
+                            data['tailored_data'].append('')
+
             else:
                 print(f'{protein_construct} on {bio_rep} has no {test} test data.')
     #--------------------Now that the main filtering is done, it's time to do ANOVA or Kruskal-Wallis on each set of pH values--------------------------------#
@@ -80,12 +105,9 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
     grouped_dict = {}
 
     pHs = []
-    pH_values = []
     for pH in data['pH']:
         if pH not in pHs:
             pHs.append(pH)
-            pH_values.append(float(pH))
-    pH_linspace = np.linspace(min(pH_values),max(pH_values),400)
 
     def group(combine):
         #If you want to combine the replicates:
@@ -127,7 +149,7 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
 
                 #Generate confidence intervals here...
                 pH_date_kruskal = stats.kruskal(*voi_dict.values())
-                print(f'{pH}: {pH_date_kruskal}')
+                #print(f'{pH}: {pH_date_kruskal}')
                 #pH_date_ANOVA = stats.f_oneway(*voi_dict.values(),equal_var=False)
                 #print(pH_date_ANOVA)
                 #ANOVA over only 2 groups lends a p-value that is essentially the same as that for the t-test. Un-comment the next line for proof.
@@ -158,16 +180,17 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
         #If you don't want to combine the replicates:
         else:
             for pH in pHs:
-                for replicate in range(len(data['data'])):
-                    if pH == data['pH'][replicate]:
-                        construct_and_date = data['protein construct'][replicate]+"_"+data['date'][replicate]
-                        if construct_and_date in grouped_dict:
-                            if pH in grouped_dict[construct_and_date]:
-                                grouped_dict[construct_and_date][pH].append(max(data['data'][replicate],0.0))
+                for replicate in range(len(data['tailored_data'])):
+                    if type(data['tailored_data'][replicate])==float:
+                        if pH == data['pH'][replicate]:
+                            construct_and_date = data['protein construct'][replicate]+"_"+data['date'][replicate]
+                            if construct_and_date in grouped_dict:
+                                if pH in grouped_dict[construct_and_date]:
+                                    grouped_dict[construct_and_date][pH].append(max(data['tailored_data'][replicate],0.0))
+                                else:
+                                    grouped_dict[construct_and_date][pH] = [max(data['tailored_data'][replicate],0.0)]
                             else:
-                                grouped_dict[construct_and_date][pH] = [max(data['data'][replicate],0.0)]
-                        else:
-                            grouped_dict[construct_and_date] = {pH:[max(data['data'][replicate],0.0)]}
+                                grouped_dict[construct_and_date] = {pH:[max(data['tailored_data'][replicate],0.0)]}
 
     group(combine)
 
@@ -197,13 +220,17 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
             #HERE IS WHERE TO WORK NEXT! We have to make it so that all single-construct plots have both curves and scatter plots,
             #And the two-construct plots have just curves, whenever possible.
             try:
+                pH_values = []
                 medians = []
                 for pH in grouped_dict[construct_and_date]:
+                    if len(grouped_dict[construct_and_date][pH])!=0:
+                        pH_values.append(float(pH))
                     #mean = sum(grouped_dict[construct_and_date][pH])/len(grouped_dict[construct_and_date][pH])
                     #means.append(mean)
                     median = np.median(grouped_dict[construct_and_date][pH])
                     medians.append(median)
-                print(f'medians: {medians}')
+                pH_linspace = np.linspace(min(pH_values),max(pH_values),400)
+                #print(f'medians: {medians}')
                 #stats.mannwhitneyu()
                 initial_guesses = [max(medians),-3,5.5,min(medians)]
                 best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,medians,p0=initial_guesses)
@@ -219,7 +246,7 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                 handles.append(plot[0])
                 labels.append(construct_and_date)
             except Exception as e:
-                print(f'The curve fit failed due to: {e}. Plotting points instead of fitted curve...')
+                print(f'The curve fit for {construct_and_date} failed due to: {e}. Plotting points instead of fitted curve...')
                 construct_pHs = []
                 construct_data = []
                 for pH in grouped_dict[construct_and_date]:
@@ -249,16 +276,15 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
         plt.legend(handles,labels)
         plt.show()
 
-#for protein_construct in protein_dict:
-#    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-#        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False)
-#        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=True)
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False)
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=True)
 
-#for protein_construct in protein_dict:
-#    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-#        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
-#        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
 
-#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
-#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
-statisticize([('10xHis-1TEL-TV-vWA','A400')],plot=True,combine=False)
+statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
+statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
