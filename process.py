@@ -4,6 +4,12 @@ from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import numpy as np
 
+#1)Pull specified constructs and their corresponding specified data from csv and put into protein_dict by calling the master function 'statisticize'. Ex.:
+    #statisticize([('Construct1','A400'),('Construct2','A400')])
+#2)Repeat steps 3-4 for each construct asked for.
+#3)Either combine or don't all of the biological replicates (combine bool==True or False). Populate the grouped_dict with this.
+#4)Determine medians, try to fit a curve, and plot.
+
 #First, place all the data within a dictionary, separating by protein construct, then by date/concentration/pH, then by test-type.
 protein_dict = {}
 
@@ -217,8 +223,8 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                 alpha=0.45,
                 label="95% CI band",
             )"""
-            #HERE IS WHERE TO WORK NEXT! We have to make it so that all single-construct plots have both curves and scatter plots,
-            #And the two-construct plots have just curves, whenever possible.
+            #HERE IS WHERE TO WORK NEXT! All of the plots comparing single to double trigger show both the curves and scatter dots. We need to now make it so that anything
+            #combined doesn't include the scatter plot dots.
             try:
                 pH_values = []
                 medians = []
@@ -245,6 +251,18 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                     plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters))
                 handles.append(plot[0])
                 labels.append(construct_and_date)
+                construct_pHs = []
+                construct_data = []
+                for pH in grouped_dict[construct_and_date]:
+                    for replicate in grouped_dict[construct_and_date][pH]:
+                        construct_pHs.append(float(pH))
+                        construct_data.append(replicate)
+                if "2Trig" in construct_and_date and "/" in construct_and_date:
+                    plot = plt.scatter(construct_pHs,construct_data,marker="^")
+                elif "/" in construct_and_date:
+                    plot = plt.scatter(construct_pHs,construct_data)
+                handles.append(plot)
+                labels.append(construct_and_date)
             except Exception as e:
                 print(f'The curve fit for {construct_and_date} failed due to: {e}. Plotting points instead of fitted curve...')
                 construct_pHs = []
@@ -253,9 +271,9 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                     for replicate in grouped_dict[construct_and_date][pH]:
                         construct_pHs.append(float(pH))
                         construct_data.append(replicate)
-                if "2Trig" in construct_and_date:
+                if "2Trig" in construct_and_date and "/" in construct_and_date:
                     plot = plt.scatter(construct_pHs,construct_data,marker="^")
-                else:
+                elif "/" in construct_and_date:
                     plot = plt.scatter(construct_pHs,construct_data)
                 handles.append(plot)
                 labels.append(construct_and_date)
@@ -285,6 +303,12 @@ for protein_construct in protein_dict:
     if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
         statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
+
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+        statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
+        statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
+
 
 statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
 statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
