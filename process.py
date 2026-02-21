@@ -2,6 +2,7 @@ import csv
 from scipy import stats
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
+from matplotlib.legend_handler import HandlerTuple
 import numpy as np
 
 #1)Pull specified constructs and their corresponding specified data from csv and put into protein_dict by calling the master function 'statisticize'. Ex.:
@@ -242,23 +243,29 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                 if best_fit_parameters[2] < 4.0:
                     raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct_and_date} below 4.0")
                 #print(best_fit_parameters)
+                combined_handles = []
                 if "2Trig" in construct_and_date:
                     plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--")
                 else:
                     plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters))
-                handles.append(plot[0])
-                labels.append(construct_and_date)
+                line_handle = plot[0]
                 construct_pHs = []
                 construct_data = []
                 for pH in grouped_dict[construct_and_date]:
                     for replicate in grouped_dict[construct_and_date][pH]:
                         construct_pHs.append(float(pH))
                         construct_data.append(replicate)
-                if "2Trig" in construct_and_date and "/" in construct_and_date:
-                    plot = plt.scatter(construct_pHs,construct_data,marker="^")
-                elif "/" in construct_and_date:
-                    plot = plt.scatter(construct_pHs,construct_data)
-                handles.append(plot)
+                scatter_handle = None
+                if "/" in construct_and_date:
+                    if "2Trig" in construct_and_date:
+                        scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^")
+                else:
+                        scatter_handle = plt.scatter(construct_pHs,construct_data)
+                #Legend Entry - if the scatter_handle is something then we use two symbols in the legend but if it is None then we only use one symbol.
+                if scatter_handle is not None:
+                    handles.append((line_handle, scatter_handle))
+                else:
+                    handles.append(line_handle)
                 labels.append(construct_and_date)
             except Exception as e:
                 print(f'The curve fit for {construct_and_date} failed due to: {e}. Plotting points instead of fitted curve...')
@@ -278,17 +285,20 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
         if len(proteins_and_tests)==1:
             plt.title(f'{protein_constructs[0]} {tests[0]}')
             plt.ylabel(tests[0])
+            plt.xlabel('pH')
         else:
             #If two different protein constructs were passed in, we want to show that they are the same. This is usually testing single vs. double trigger variants.
             #For this test, we aggregate the biological replicates of a given protein construct whether or not they are statistically significantly different.
             if len(protein_constructs)==2 and len(tests)==1:
                 plt.title(f'{protein_constructs[0]} vs. {protein_constructs[1]} {tests[0]}')
                 plt.ylabel(tests[0])
+                plt.xlabel('pH')
             #If the same protein construct was passed in twice with two different tests, we want to show that they are the same.
             elif len(protein_constructs)==1 and len(tests)==2:
                 plt.title(f'{protein_constructs[0]} {tests[0]} vs. {tests[1]}')
                 plt.ylabel(tests[0])
-        plt.legend(handles,labels)
+                plt.xlabel('pH')
+        plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
         plt.show()
 
 #for protein_construct in protein_dict:
@@ -301,20 +311,20 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
 #        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
 #        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
 
-#for protein_construct in protein_dict:
-#    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-#        statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
-#        statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
-
 for protein_construct in protein_dict:
     if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
+        statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
+        #statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' in protein_construct and 'Gravity' not in protein_construct:
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
+#for protein_construct in protein_dict:
+#    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+#        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
+#        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
+
+#for protein_construct in protein_dict:
+#    if '2Trig' in protein_construct and 'Gravity' not in protein_construct:
+#        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
+#        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
 
 #statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
 #statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
