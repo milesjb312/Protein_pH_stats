@@ -42,7 +42,7 @@ with open('data.csv',newline="") as csvfile:
             else:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(row['A280_48-72hr']))
 
-def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False):
+def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,require_matched_groups_var=False):
     """
     Normally, you should pass only one test and one protein construct into 'proteins_and_tests', in the form of a list of tuples, where the
     tuple looks like: (protein_construct,test)
@@ -99,8 +99,6 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                             data['data'].append(float(replicate.strip("*"))/theoretical_max_concentration)
                             data['tailored_data'].append('')
 
-            else:
-                print(f'{protein_construct} on {bio_rep} has no {test} test data.')
     #--------------------Now that the main filtering is done, it's time to do ANOVA or Kruskal-Wallis on each set of pH values--------------------------------#
     #The first step is to further filter the data, moving it into dictionaries that denote the groups of interest. This is dependent on the number of
     #protein constructs and tests passed into this function.
@@ -187,7 +185,10 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                 for replicate in range(len(data['tailored_data'])):
                     if type(data['tailored_data'][replicate])==float:
                         if pH == data['pH'][replicate]:
-                            construct_and_date = data['protein construct'][replicate]+"_"+data['date'][replicate]
+                            if len(tests)==2:
+                                construct_and_date = data['protein construct'][replicate]+"_"+data['date'][replicate]+"_"+data['test'][replicate]
+                            else:
+                                construct_and_date = data['protein construct'][replicate]+"_"+data['date'][replicate]
                             if construct_and_date in grouped_dict:
                                 if pH in grouped_dict[construct_and_date]:
                                     grouped_dict[construct_and_date][pH].append(max(data['tailored_data'][replicate],0.0))
@@ -196,7 +197,26 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                             else:
                                 grouped_dict[construct_and_date] = {pH:[max(data['tailored_data'][replicate],0.0)]}
 
+    def require_matched_groups():
+        """This function is meant to be used when comparing two tests of the same biological replicate. It gets rid of biological replicates with only one of
+        the tests."""
+        new_grouped_dict = {}
+        date_counts = {}
+        for construct_and_date in grouped_dict:
+            date=construct_and_date.split("_")[1]
+            if date in date_counts:
+                date_counts[date]+=1
+            else:
+                date_counts[date]=1
+        for construct_and_date in grouped_dict:
+            if date_counts[construct_and_date.split("_")[1]]>=2:
+                new_grouped_dict[construct_and_date] = grouped_dict[construct_and_date]
+        return new_grouped_dict
+
     group(combine)
+
+    if require_matched_groups_var:
+        grouped_dict = require_matched_groups()
 
     def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
         #This is the model that we're going to try to fit using scipy's curve_fit function.
@@ -305,16 +325,7 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
 
 for protein_construct in protein_dict:
     if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False)
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=True)
-
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
-
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+        """
         #Single vs. Double-trigger A400
         statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False)
         statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=True)
@@ -327,11 +338,11 @@ for protein_construct in protein_dict:
         statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
         statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
         statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
-
+        """
         #Single trigger A280_1hr vs A280_48-72hr
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False,require_matched_groups_var=True)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True,require_matched_groups_var=True)
 
 #Single trigger TV-vWA A400
-statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
-statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
+#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
+#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
