@@ -205,6 +205,8 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
     if plot==True:
         handles = []
         labels = []
+        inflection_handle = None
+        inflection_label = "Inflection Point"
         for construct_and_date in grouped_dict:
             #Somewhere below this line, we would incorporate the Confidence Interval Band.
             #What would realistically be a 95% confidence interval here? We don't know the shape of the population, so we could assume a normal distribution,
@@ -262,7 +264,9 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                     else:
                         scatter_handle = plt.scatter(construct_pHs,construct_data)
                 else:
-                    plt.axvline(round((best_fit_parameters[2]),2), color='green', linestyle=":", linewidth=2, label=f"{construct_and_date} Inflection Point")
+                    inflection_point_line = plt.axvline(round((best_fit_parameters[2]),2), color='green', linestyle=":", linewidth=2)
+                    if inflection_handle is None:
+                        inflection_handle = inflection_point_line
                 #Legend Entry - if the scatter_handle is something then we use two symbols in the legend but if it is None then we only use one symbol.
                 if scatter_handle is not None:
                     handles.append((line_handle, scatter_handle))
@@ -300,7 +304,12 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                 plt.title(f'{protein_constructs[0]} {tests[0]} vs. {tests[1]}')
                 plt.ylabel(tests[0])
                 plt.xlabel('pH')
-        plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
+        legend_handles = handles.copy()
+        legend_labels = labels.copy()
+        if inflection_handle is not None:
+            legend_handles.append(inflection_handle)
+            legend_labels.append(inflection_label)
+        plt.legend(legend_handles,legend_labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
         plt.show()
 
 for protein_construct in protein_dict:
