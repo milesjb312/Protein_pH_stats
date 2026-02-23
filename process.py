@@ -260,8 +260,9 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                     if "2Trig" in construct_and_date:
                         scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^")
                     else:
-                            scatter_handle = plt.scatter(construct_pHs,construct_data)
-                        plt.axvline(round((best_fit_parameters[2]),2), color='green', linestyle=":", linewidth=2, label=f"{construct_and_date} Inflection Point")
+                        scatter_handle = plt.scatter(construct_pHs,construct_data)
+                else:
+                    plt.axvline(round((best_fit_parameters[2]),2), color='green', linestyle=":", linewidth=2, label=f"{construct_and_date} Inflection Point")
                 #Legend Entry - if the scatter_handle is something then we use two symbols in the legend but if it is None then we only use one symbol.
                 if scatter_handle is not None:
                     handles.append((line_handle, scatter_handle))
