@@ -259,8 +259,8 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False)
                 if "/" in construct_and_date:
                     if "2Trig" in construct_and_date:
                         scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^")
-                else:
-                        scatter_handle = plt.scatter(construct_pHs,construct_data)
+                    else:
+                            scatter_handle = plt.scatter(construct_pHs,construct_data)
                         plt.axvline(round((best_fit_parameters[2]),2), color='green', linestyle=":", linewidth=2, label=f"{construct_and_date} Inflection Point")
                 #Legend Entry - if the scatter_handle is something then we use two symbols in the legend but if it is None then we only use one symbol.
                 if scatter_handle is not None:
@@ -314,18 +314,23 @@ for protein_construct in protein_dict:
 
 for protein_construct in protein_dict:
     if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+        #Single vs. Double-trigger A400
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False)
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=True)
+
+        #Single vs. Double-trigger A280-1hr
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
+
+        #Single vs. Double-trigger A280_48-72hr
         statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
         statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
+        statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
 
-#for protein_construct in protein_dict:
-#    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-#        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
-#        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
+        #Single trigger A280_1hr vs A280_48-72hr
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
 
-#for protein_construct in protein_dict:
-#    if '2Trig' in protein_construct and 'Gravity' not in protein_construct:
-#        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
-#        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
-
-#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
-#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
+#Single trigger TV-vWA A400
+statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
+statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=True)
