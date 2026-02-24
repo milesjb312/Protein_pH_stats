@@ -227,6 +227,24 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
         labels = []
         inflection_handle = None
         inflection_label = "Inflection Point"
+        keys_1trig = []
+        keys_2trig = []
+        for protein in grouped_dict:
+            if "2Trig" in (protein.split("_")[0]):
+                    keys_2trig.append(protein)
+            else:
+                keys_1trig.append(protein)
+        def shade_list(cmap, n, lo=0.35, hi=0.8):
+            if n<= 1:
+                return [cmap((lo + hi) / 2)]
+            return [cmap(x) for x in np.linspace(lo, hi, n)]
+        blue_shades = shade_list(plt.cm.Blues, len(keys_1trig))
+        orange_shades = shade_list(plt.cm.Oranges, len(keys_2trig))
+        color_map = {}
+        for protein, color in zip(sorted(keys_1trig), blue_shades):
+            color_map[protein] = color
+        for protein, color in zip(sorted(keys_2trig), orange_shades):
+            color_map[protein] = color
         for construct_and_date in grouped_dict:
             #Somewhere below this line, we would incorporate the Confidence Interval Band.
             #What would realistically be a 95% confidence interval here? We don't know the shape of the population, so we could assume a normal distribution,
@@ -265,11 +283,11 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                 if best_fit_parameters[2] < 4.0:
                     raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct_and_date} below 4.0")
                 #print(best_fit_parameters)
-                combined_handles = []
+                series_color = color_map[construct_and_date]
                 if "2Trig" in construct_and_date:
-                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--")
+                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--", color=series_color)
                 else:
-                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters))
+                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters), color=series_color)
                 line_handle = plot[0]
                 construct_pHs = []
                 construct_data = []
@@ -280,9 +298,9 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                 scatter_handle = None
                 if "/" in construct_and_date:
                     if "2Trig" in construct_and_date:
-                        scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^")
+                        scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^", color=series_color)
                     else:
-                        scatter_handle = plt.scatter(construct_pHs,construct_data)
+                        scatter_handle = plt.scatter(construct_pHs,construct_data, color=series_color)
                 else:
                     inflection_point_line = plt.axvline(round((best_fit_parameters[2]),2), color='green', linestyle=":", linewidth=2)
                     if inflection_handle is None:
@@ -301,10 +319,11 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                     for replicate in grouped_dict[construct_and_date][pH]:
                         construct_pHs.append(float(pH))
                         construct_data.append(replicate)
+                series_color = color_map.get(construct_and_date, None)
                 if "2Trig" in construct_and_date and "/" in construct_and_date:
-                    plot = plt.scatter(construct_pHs,construct_data,marker="^")
+                    plot = plt.scatter(construct_pHs,construct_data,marker="^", color=series_color)
                 elif "/" in construct_and_date:
-                    plot = plt.scatter(construct_pHs,construct_data)
+                    plot = plt.scatter(construct_pHs,construct_data, color=series_color)
                 handles.append(plot)
                 labels.append(construct_and_date)
 
