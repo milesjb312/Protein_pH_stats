@@ -283,11 +283,10 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                 if best_fit_parameters[2] < 4.0:
                     raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct_and_date} below 4.0")
                 #print(best_fit_parameters)
-                series_color = color_map[construct_and_date]
                 if "2Trig" in construct_and_date:
-                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--", color=series_color)
+                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--", color=color_map[construct_and_date])
                 else:
-                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters), color=series_color)
+                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters), color=color_map[construct_and_date])
                 line_handle = plot[0]
                 construct_pHs = []
                 construct_data = []
@@ -298,9 +297,9 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                 scatter_handle = None
                 if "/" in construct_and_date:
                     if "2Trig" in construct_and_date:
-                        scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^", color=series_color)
+                        scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct_and_date])
                     else:
-                        scatter_handle = plt.scatter(construct_pHs,construct_data, color=series_color)
+                        scatter_handle = plt.scatter(construct_pHs,construct_data, color=color_map[construct_and_date])
                 else:
                     inflection_point_line = plt.axvline(round((best_fit_parameters[2]),2), color='green', linestyle=":", linewidth=2)
                     if inflection_handle is None:
@@ -319,11 +318,10 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                     for replicate in grouped_dict[construct_and_date][pH]:
                         construct_pHs.append(float(pH))
                         construct_data.append(replicate)
-                series_color = color_map.get(construct_and_date, None)
-                if "2Trig" in construct_and_date and "/" in construct_and_date:
-                    plot = plt.scatter(construct_pHs,construct_data,marker="^", color=series_color)
-                elif "/" in construct_and_date:
-                    plot = plt.scatter(construct_pHs,construct_data, color=series_color)
+                if "2Trig" in construct_and_date:
+                    plot = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct_and_date])
+                else:
+                    plot = plt.scatter(construct_pHs,construct_data, color=color_map[construct_and_date])
                 handles.append(plot)
                 labels.append(construct_and_date)
 
@@ -357,22 +355,22 @@ for protein_construct in protein_dict:
         statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False)
         statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        #Single vs. Double-trigger A280-1hr
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
+#for protein_construct in protein_dict:
+    #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+    #    #Single vs. Double-trigger A280-1hr
+    #    statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=False)
+    #    statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],boxplot=False,plot=True,combine=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        #Single vs. Double-trigger A280_48-72hr
-        statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
-        statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
+#for protein_construct in protein_dict:
+ #   if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+  #      #Single vs. Double-trigger A280_48-72hr
+   #     statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False)
+    #    statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        #Single trigger A280_1hr vs A280_48-72hr
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False,require_matched_groups_var=True)
+#for protein_construct in protein_dict:
+ #   if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+  #      #Single trigger A280_1hr vs A280_48-72hr
+   #     statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],boxplot=False,plot=True,combine=False,require_matched_groups_var=True)
 
 #Single trigger TV-vWA A400
 #statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True,combine=False)
