@@ -245,6 +245,8 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
             color_map[protein] = color
         for protein, color in zip(sorted(keys_2trig), orange_shades):
             color_map[protein] = color
+        inflection_points_1trig = []
+        inflection_points_2trig = []
         for construct_and_date in grouped_dict:
             #Somewhere below this line, we would incorporate the Confidence Interval Band.
             #What would realistically be a 95% confidence interval here? We don't know the shape of the population, so we could assume a normal distribution,
@@ -279,6 +281,17 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                 initial_guesses = [max(medians),-3,5.5,min(medians)]
                 best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,medians,p0=initial_guesses)
                 #print(f'best fit parameters for {construct_and_date}: {best_fit_parameters}')
+                if "/" in construct_and_date:
+                    if "2Trig" in construct_and_date and best_fit_parameters[2] > 4.0:
+                        inflection_points_2trig.append(best_fit_parameters[2])
+                    elif "2Trig" in construct_and_date and best_fit_parameters[2] < 4.0:
+                        inflection_points_2trig.append(float(4.0))
+                    elif not "2Trig" in construct_and_date and best_fit_parameters[2] < 4.0:
+                        inflection_points_1trig.append(float(4.0))
+                    else:
+                        inflection_points_1trig.append(best_fit_parameters[2])
+                #if "/" not in construct_and_date:
+
                 #don't plot the curve_fit if the inflection point is below 4.0
                 if best_fit_parameters[2] < 4.0:
                     raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct_and_date} below 4.0")
@@ -301,9 +314,12 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                     else:
                         scatter_handle = plt.scatter(construct_pHs,construct_data, color=color_map[construct_and_date])
                 else:
-                    inflection_point_line = plt.axvline(round((best_fit_parameters[2]),2), color='green', linestyle=":", linewidth=2)
+                    #The asterisk unpacks all of the variables in bets_fit_parameters so that the model has all the constants it needs to calculate the y value 
+                    #at the inflection point.
+                    inflection_point_marker = plt.scatter(best_fit_parameters[2], pH_to_absorbance_model_4pl(best_fit_parameters[2],*best_fit_parameters), color='Black', marker='x', s=100, 
+                                linewidths=2.5, label="Inflection Point", zorder=10)
                     if inflection_handle is None:
-                        inflection_handle = inflection_point_line
+                        inflection_handle = inflection_point_marker
                 #Legend Entry - if the scatter_handle is something then we use two symbols in the legend but if it is None then we only use one symbol.
                 if scatter_handle is not None:
                     handles.append((line_handle, scatter_handle))
@@ -347,6 +363,8 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
             legend_handles.append(inflection_handle)
             legend_labels.append(inflection_label)
         plt.legend(legend_handles,legend_labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
+        print(f'Single Trigger Inflection Points: {inflection_points_1trig}')
+        print(f'Double Trigger Inflection Points: {inflection_points_2trig}')
         plt.show()
 
 for protein_construct in protein_dict:
