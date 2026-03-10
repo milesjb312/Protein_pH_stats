@@ -42,7 +42,7 @@ with open('data.csv',newline="") as csvfile:
             else:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(row['A280_48-72hr']))
 
-def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,require_matched_groups_var=False):
+def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=False,combine=False,require_matched_groups_var=False):
     """
     Normally, you should pass only one test and one protein construct into 'proteins_and_tests', in the form of a list of tuples, where the
     tuple looks like: (protein_construct,test)
@@ -223,30 +223,34 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
         return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
 
     if plot==True:
-        handles = []
-        labels = []
-        inflection_handle = None
-        inflection_label = "Inflection Point"
-        keys_1trig = []
-        keys_2trig = []
-        for protein in grouped_dict:
-            if "2Trig" in (protein.split("_")[0]):
-                    keys_2trig.append(protein)
-            else:
-                keys_1trig.append(protein)
-        def shade_list(cmap, n, lo=0.25, hi=0.9):
-            if n<= 1:
-                return [cmap((lo + hi) / 2)]
-            return [cmap(x) for x in np.linspace(lo, hi, n)]
-        blue_shades = shade_list(plt.cm.Blues, len(keys_1trig))
-        orange_shades = shade_list(plt.cm.Oranges, len(keys_2trig))
-        color_map = {}
-        for protein, color in zip(sorted(keys_1trig), blue_shades):
-            color_map[protein] = color
-        for protein, color in zip(sorted(keys_2trig), orange_shades):
-            color_map[protein] = color
+        handles_and_labels = {}
+
+        
+        def change_colors():
+            keys_1trig = []
+            keys_2trig = []
+            for protein in grouped_dict:
+                if "2Trig" in (protein.split("_")[0]):
+                        keys_2trig.append(protein)
+                else:
+                    keys_1trig.append(protein)
+            def shade_list(cmap, n, lo=0.25, hi=0.9):
+                if n<= 1:
+                    return [cmap((lo + hi) / 2)]
+                return [cmap(x) for x in np.linspace(lo, hi, n)]
+            blue_shades = shade_list(plt.cm.Blues, len(keys_1trig))
+            orange_shades = shade_list(plt.cm.Oranges, len(keys_2trig))
+            color_map = {}
+            for protein, color in zip(sorted(keys_1trig), blue_shades):
+                color_map[protein] = color
+            for protein, color in zip(sorted(keys_2trig), orange_shades):
+                color_map[protein] = color
+            return color_map
+        color_map = change_colors()
+
         inflection_points_1trig = []
         inflection_points_2trig = []
+
         for construct_and_date in grouped_dict:
             #Somewhere below this line, we would incorporate the Confidence Interval Band.
             #What would realistically be a 95% confidence interval here? We don't know the shape of the population, so we could assume a normal distribution,
@@ -263,34 +267,33 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                 alpha=0.45,
                 label="95% CI band",
             )"""
-            #HERE IS WHERE TO WORK NEXT! All of the plots comparing single to double trigger show both the curves and scatter dots. We need to now make it so that anything
-            #combined doesn't include the scatter plot dots.
             try:
                 pH_values = []
                 medians = []
+                #means = []
                 for pH in grouped_dict[construct_and_date]:
                     if len(grouped_dict[construct_and_date][pH])!=0:
                         pH_values.append(float(pH))
-                    #mean = sum(grouped_dict[construct_and_date][pH])/len(grouped_dict[construct_and_date][pH])
+                    #mean = np.mean(grouped_dict[construct_and_date][pH])
                     #means.append(mean)
                     median = np.median(grouped_dict[construct_and_date][pH])
                     medians.append(median)
                 pH_linspace = np.linspace(min(pH_values),max(pH_values),400)
                 #print(f'medians: {medians}')
                 #stats.mannwhitneyu()
-                initial_guesses = [max(medians),-3,5.5,min(medians)]
+                initial_guesses = [max(medians),-4,5.5,min(medians)]
+                #The returned values from the curve_fit match the order of those passed in as initial guesses, namely: [max,slope,inflection point,min]
                 best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,medians,p0=initial_guesses)
                 #print(f'best fit parameters for {construct_and_date}: {best_fit_parameters}')
-                if "/" in construct_and_date:
-                    if "2Trig" in construct_and_date and best_fit_parameters[2] > 4.0:
-                        inflection_points_2trig.append(best_fit_parameters[2])
-                    elif "2Trig" in construct_and_date and best_fit_parameters[2] < 4.0:
-                        inflection_points_2trig.append(float(4.0))
-                    elif not "2Trig" in construct_and_date and best_fit_parameters[2] < 4.0:
-                        inflection_points_1trig.append(float(4.0))
-                    else:
-                        inflection_points_1trig.append(best_fit_parameters[2])
-                #if "/" not in construct_and_date:
+                #if "/" in construct_and_date:
+                if "2Trig" in construct_and_date and best_fit_parameters[2] > 4.0:
+                    inflection_points_2trig.append(best_fit_parameters[2])
+                elif "2Trig" in construct_and_date and best_fit_parameters[2] < 4.0:
+                    inflection_points_2trig.append(float(4.0))
+                elif not "2Trig" in construct_and_date and best_fit_parameters[2] < 4.0:
+                    inflection_points_1trig.append(float(4.0))
+                else:
+                    inflection_points_1trig.append(best_fit_parameters[2])
 
                 #don't plot the curve_fit if the inflection point is below 4.0
                 if best_fit_parameters[2] < 4.0:
@@ -313,19 +316,19 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                         scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct_and_date])
                     else:
                         scatter_handle = plt.scatter(construct_pHs,construct_data, color=color_map[construct_and_date])
-                else:
-                    #The asterisk unpacks all of the variables in bets_fit_parameters so that the model has all the constants it needs to calculate the y value 
-                    #at the inflection point.
-                    inflection_point_marker = plt.scatter(best_fit_parameters[2], pH_to_absorbance_model_4pl(best_fit_parameters[2],*best_fit_parameters), color='Black', marker='x', s=100, 
-                                linewidths=2.5, label="Inflection Point", zorder=10)
-                    if inflection_handle is None:
-                        inflection_handle = inflection_point_marker
-                #Legend Entry - if the scatter_handle is something then we use two symbols in the legend but if it is None then we only use one symbol.
+                #The asterisk unpacks all of the variables in bets_fit_parameters so that the model has all the constants it needs to calculate the y value 
+                #at the inflection point.
+                if plot_singly:
+                    if len(inflection_points_1trig)>0:
+                        inflection = plt.axvline(inflection_points_1trig[-1],color="blue",linestyle="--")
+                        handles_and_labels[inflection] = f"Inflection point at: {inflection_points_1trig[-1].round(2)}"
+                    if len(inflection_points_2trig)>0:
+                        inflection_2 = plt.axvline(inflection_points_2trig[-1],color="red",linestyle="--")
+                        handles_and_labels[inflection_2] = f"Inflection point at: {inflection_points_2trig[-1].round(2)}"
                 if scatter_handle is not None:
-                    handles.append((line_handle, scatter_handle))
+                    handles_and_labels[(line_handle, scatter_handle)] = construct_and_date
                 else:
-                    handles.append(line_handle)
-                labels.append(construct_and_date)
+                    handles_and_labels[line_handle] = construct_and_date
             except Exception as e:
                 print(f'The curve fit for {construct_and_date} failed due to: {e}. Plotting points instead of fitted curve...')
                 construct_pHs = []
@@ -338,40 +341,69 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot=False,combine=False,
                     plot = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct_and_date])
                 else:
                     plot = plt.scatter(construct_pHs,construct_data, color=color_map[construct_and_date])
-                handles.append(plot)
-                labels.append(construct_and_date)
+                handles_and_labels[plot] = construct_and_date
+            if plot_singly:
+                if len(proteins_and_tests)==1:
+                    plt.title(f'{protein_constructs[0]} {tests[0]}')
+                    plt.ylabel(tests[0])
+                    plt.xlabel('pH')
+                handles = [handle for handle in handles_and_labels]
+                labels = [label for handle in handles_and_labels for label in [handles_and_labels[handle]]]
+                plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
+                plt.show()
+                handles_and_labels = {}
 
-        if len(proteins_and_tests)==1:
-            plt.title(f'{protein_constructs[0]} {tests[0]}')
-            plt.ylabel(tests[0])
-            plt.xlabel('pH')
-        else:
-            #If two different protein constructs were passed in, we want to show that they are the same. This is usually testing single vs. double trigger variants.
-            #For this test, we aggregate the biological replicates of a given protein construct whether or not they are statistically significantly different.
-            if len(protein_constructs)==2 and len(tests)==1:
-                plt.title(f'{protein_constructs[0]} vs. {protein_constructs[1]} {tests[0]}')
+        if not plot_singly:
+            print(f'inflection_points_1trig:{inflection_points_2trig}')
+            print(f'inflection_points_2trig:{inflection_points_2trig}')
+            if len(inflection_points_1trig)>1:
+                single_trigger_inflection_point = np.mean(inflection_points_1trig)
+                inflection_1 = plt.axvline(single_trigger_inflection_point,color="blue",linestyle="--")
+                handles_and_labels[inflection_1] = f"Inflection point at: {single_trigger_inflection_point.round(2)}"
+            elif len(inflection_points_1trig)==1:
+                inflection_1 = plt.axvline(inflection_points_1trig[0],color='blue',linestyle="--")
+                handles_and_labels[inflection_1] = f"Inflection point at: {np.float64(inflection_points_1trig[0]).round(2)}"
+
+            if len(inflection_points_2trig)>1:
+                double_trigger_inflection_point = np.mean(inflection_points_2trig)
+                inflection_2 = plt.axvline(double_trigger_inflection_point,color="red",linestyle="--")
+                handles_and_labels[inflection_2] = f"Inflection point at: {double_trigger_inflection_point.round(2)}"
+            elif len(inflection_points_2trig)==1:
+                inflection_2 = plt.axvline(inflection_points_2trig[0],color='red',linestyle="--")
+                handles_and_labels[inflection_2] = f"Inflection point at: {np.float64(inflection_points_2trig[0]).round(2)}"        
+
+            if len(proteins_and_tests)==1:
+                plt.title(f'{protein_constructs[0]} {tests[0]}')
                 plt.ylabel(tests[0])
                 plt.xlabel('pH')
-            #If the same protein construct was passed in twice with two different tests, we want to show that they are the same.
-            elif len(protein_constructs)==1 and len(tests)==2:
-                plt.title(f'{protein_constructs[0]} {tests[0]} vs. {tests[1]}')
-                plt.ylabel(tests[0])
-                plt.xlabel('pH')
-        legend_handles = handles.copy()
-        legend_labels = labels.copy()
-        if inflection_handle is not None:
-            legend_handles.append(inflection_handle)
-            legend_labels.append(inflection_label)
-        plt.legend(legend_handles,legend_labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
-        print(f'Single Trigger Inflection Points: {inflection_points_1trig}')
-        print(f'Double Trigger Inflection Points: {inflection_points_2trig}')
-        plt.show()
+            else:
+                #If two different protein constructs were passed in, we want to show that they are the same. This is usually testing single vs. double trigger variants.
+                #For this test, we aggregate the biological replicates of a given protein construct whether or not they are statistically significantly different.
+                if len(protein_constructs)==2 and len(tests)==1:
+                    plt.title(f'{protein_constructs[0]} vs. {protein_constructs[1]} {tests[0]}')
+                    plt.ylabel(tests[0])
+                    plt.xlabel('pH')
+                #If the same protein construct was passed in twice with two different tests, we want to show that they are the same.
+                elif len(protein_constructs)==1 and len(tests)==2:
+                    plt.title(f'{protein_constructs[0]} {tests[0]} vs. {tests[1]}')
+                    plt.ylabel(tests[0])
+                    plt.xlabel('pH')
+            handles = [handle for handle in handles_and_labels]
+            labels = [label for handle in handles_and_labels for label in [handles_and_labels[handle]]]
+            plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
+            plt.show()
+
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+        #Single-trigger A400
+        statisticize([(f'{protein_construct}','A400')],boxplot=False,plot=True,combine=False,plot_singly=True)
+        statisticize([(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False,plot_singly=True)
 
 for protein_construct in protein_dict:
     if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single vs. Double-trigger A400
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False)
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=True)
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True,combine=True)
 
 #for protein_construct in protein_dict:
  #   if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
