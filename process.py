@@ -269,21 +269,22 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
             )"""
             try:
                 pH_values = []
-                medians = []
-                #means = []
+                #medians = []
+                means = []
                 for pH in grouped_dict[construct_and_date]:
                     if len(grouped_dict[construct_and_date][pH])!=0:
                         pH_values.append(float(pH))
-                    #mean = np.mean(grouped_dict[construct_and_date][pH])
-                    #means.append(mean)
-                    median = np.median(grouped_dict[construct_and_date][pH])
-                    medians.append(median)
+                    mean = np.mean(grouped_dict[construct_and_date][pH])
+                    means.append(mean)
+                    #median = np.median(grouped_dict[construct_and_date][pH])
+                    #medians.append(median)
                 pH_linspace = np.linspace(min(pH_values),max(pH_values),400)
                 #print(f'medians: {medians}')
                 #stats.mannwhitneyu()
-                initial_guesses = [max(medians),-4,5.5,min(medians)]
+                #initial_guesses = [max(medians),-4,5.5,min(medians)]
+                initial_guesses = [max(means),-4,5.5,min(means)]
                 #The returned values from the curve_fit match the order of those passed in as initial guesses, namely: [max,slope,inflection point,min]
-                best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,medians,p0=initial_guesses)
+                best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,means,p0=initial_guesses)
                 #print(f'best fit parameters for {construct_and_date}: {best_fit_parameters}')
                 #if "/" in construct_and_date:
                 if "2Trig" in construct_and_date and best_fit_parameters[2] > 4.0:
@@ -350,7 +351,9 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
                 handles = [handle for handle in handles_and_labels]
                 labels = [label for handle in handles_and_labels for label in [handles_and_labels[handle]]]
                 plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
+                plt.savefig(f'{construct_and_date.replace("/","_")}.png',dpi=300,bbox_inches="tight")
                 plt.show()
+                plt.close()
                 handles_and_labels = {}
 
         if not plot_singly:
@@ -391,7 +394,9 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
             handles = [handle for handle in handles_and_labels]
             labels = [label for handle in handles_and_labels for label in [handles_and_labels[handle]]]
             plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
+            plt.savefig(f'{construct_and_date.replace("/","_")}.png',dpi=300,bbox_inches="tight")
             plt.show()
+            plt.close()
 
 for protein_construct in protein_dict:
     if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
@@ -399,11 +404,11 @@ for protein_construct in protein_dict:
         statisticize([(f'{protein_construct}','A400')],boxplot=False,plot=True,combine=False,plot_singly=True)
         statisticize([(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,combine=False,plot_singly=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+#for protein_construct in protein_dict:
+#    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single vs. Double-trigger A400
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True,combine=True)
+#        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
+#        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True,combine=True)
 
 #for protein_construct in protein_dict:
  #   if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
