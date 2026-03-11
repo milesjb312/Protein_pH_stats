@@ -42,7 +42,7 @@ with open('data.csv',newline="") as csvfile:
             else:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(row['A280_48-72hr']))
 
-def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_matched_groups_var=False,tailored=False):
+def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_matched_groups_var=False,tailored=False,pool=False):
     """
     Normally, you should pass only one test and one protein construct into 'proteins_and_tests', in the form of a list of tuples, where the
     tuple looks like: (protein_construct,test)
@@ -130,31 +130,45 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_ma
     for construct in constructs_by_pH_by_date:
         for pH in constructs_by_pH_by_date[construct]:
             # Eli Note: The line below gives back a list of lists. Each outer list is a biological replicate and each inner list includes the measurements from the nanodrop for that biological replicate.
-            replicates = list(constructs_by_pH_by_date[construct][pH]["dates"].values())
-            numerator = 0.0
-            df = 0
-            all_measurements = []
-            for rep in replicates:
-                rep = np.array(rep, dtype=float)
-                all_measurements.extend(rep)
-                n_rep = len(rep)
-                s_rep = np.std(rep, ddof=1)
-                numerator += ((n_rep - 1)*(s_rep**2)) 
-                df += (n_rep - 1)
-            N_replicates = len(all_measurements)
-            pooled_sd = np.sqrt(numerator/df)
-            SE = pooled_sd/(np.sqrt(N_replicates))
-            t_stat = t.ppf(1-(alpha_bonferroni/2),df=df)
+            pH_replicates = list(constructs_by_pH_by_date[construct][pH]["dates"].values())
+            if pool:
+                weighted_variances = 0.0
+                pooled_df = 0
+            all_drops_at_current_pH = []
+            for drops in pH_replicates:
+                print(f'drops:{drops}')
+                #Turn all the drop replicates into numpy floats.
+                drops = np.array(drops, dtype=float)
+                #Put all the drop replicates into the combined measurements list
+                all_drops_at_current_pH.extend(drops)
+                if pool:
+                    sd_of_drops = np.std(drops, ddof=1)
+                    weighted_variances += ((len(drops) - 1)*(sd_of_drops**2)) 
+                    pooled_df += (len(drops) - 1)
+            N_replicates = len(all_drops_at_current_pH)
+            if pool:
+                pooled_sd = np.sqrt(weighted_variances/pooled_df)
+                SE = pooled_sd/(np.sqrt(N_replicates))
+                t_stat = t.ppf(1-(alpha_bonferroni/2),df=pooled_df)
+            else:
+                sd = np.std(all_drops_at_current_pH)
+                SE = sd/(np.sqrt(N_replicates))
+                t_stat = t.ppf(1-(alpha_bonferroni/2),df=len(all_drops_at_current_pH)-1)
+            print(f'SE: {SE}')
             error_bar = SE*t_stat
-            mean_value = np.mean(all_measurements)
+            mean_value = np.mean(all_drops_at_current_pH)
             constructs_by_pH_by_date[construct][pH]["mean"] = mean_value
-            constructs_by_pH_by_date[construct][pH]["pooled_sd"] = pooled_sd
+            if pool:
+                constructs_by_pH_by_date[construct][pH]["pooled_sd"] = pooled_sd
+                constructs_by_pH_by_date[construct][pH]["df"] = pooled_df
+            else:
+                constructs_by_pH_by_date[construct][pH]["sd"] = sd
+                constructs_by_pH_by_date[construct][pH]['df'] = len(all_drops_at_current_pH)-1
             constructs_by_pH_by_date[construct][pH]["SE"] = SE
             constructs_by_pH_by_date[construct][pH]["t_stat"] = t_stat
             constructs_by_pH_by_date[construct][pH]["error_bar"] = error_bar
             constructs_by_pH_by_date[construct][pH]["CI_lower"] = mean_value - error_bar
             constructs_by_pH_by_date[construct][pH]["CI_upper"] = mean_value + error_bar
-            constructs_by_pH_by_date[construct][pH]["df"] = df
             constructs_by_pH_by_date[construct][pH]["N"] = N_replicates
     #print(constructs_by_pH_by_date)
 
@@ -230,28 +244,27 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_ma
         inflection_points_2trig = []
 
         for construct in constructs_by_pH_by_date:
-            try:
-                print(f'Construct: {construct}')
-                pH_values = []
-                means = []
-                ci_lower_bounds = []
-                ci_upper_bounds = []
-                construct_pHs =[]
-                construct_data = []
-                # sort pHs numerically
-                sorted_pHs = sorted(constructs_by_pH_by_date[construct].keys(), key=float)
-                for pH in sorted_pHs:
-                    pH_entry = constructs_by_pH_by_date[construct][pH]
-                    pH_values.append(float(pH))
-                    means.append(pH_entry["mean"])
-                    ci_lower_bounds.append(pH_entry["CI_lower"])
-                    ci_upper_bounds.append(pH_entry["CI_upper"])
-                    # raw measurements for scatter plotting
-                    for date, measurements in pH_entry["dates"].items():
-                        for measurement in measurements:
-                            construct_pHs.append(float(pH))
-                            construct_data.append(measurement)
+            pH_values = []
+            means = []
+            ci_lower_bounds = []
+            ci_upper_bounds = []
+            construct_pHs =[]
+            construct_data = []
+            # sort pHs numerically
+            sorted_pHs = sorted(constructs_by_pH_by_date[construct].keys(), key=float)
+            for pH in sorted_pHs:
+                pH_entry = constructs_by_pH_by_date[construct][pH]
+                pH_values.append(float(pH))
+                means.append(pH_entry["mean"])
+                ci_lower_bounds.append(pH_entry["CI_lower"])
+                ci_upper_bounds.append(pH_entry["CI_upper"])
+                # raw measurements for scatter plotting
+                for date, measurements in pH_entry["dates"].items():
+                    for measurement in measurements:
+                        construct_pHs.append(float(pH))
+                        construct_data.append(measurement)
 
+            try:
                 pH_linspace = np.linspace(min(pH_values),max(pH_values),400)
                 initial_guesses = [max(means),-4,5.5,min(means)]
                 #The returned values from the curve_fit match the order of those passed in as initial guesses, namely: [max,slope,inflection point,min]
@@ -266,6 +279,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_ma
                 else:
                     inflection_points_1trig.append(best_fit_parameters[2])
 
+                ###-------------------------------###
+                #To plot the fitted curve:
                 #don't plot the curve_fit if the inflection point is below 4.0
                 if best_fit_parameters[2] < 4.0:
                     raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct} below 4.0")
@@ -277,7 +292,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_ma
 
                 line_handle = plot[0]
 
-                # plot CI band around the mean values at each pH
+                ###------plot CI band around the mean values at each pH---------------------###
                 if "2Trig" in construct:
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
                 else:
@@ -290,10 +305,9 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_ma
                     scatter_handle = plt.scatter(construct_pHs,construct_data, color=color_map[construct], alpha=0.2)
 
                 # mean points with Bonferroni error bars
-                plt.errorbar(pH_values, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
+                plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
+                ###--------------------------------------------------------------------------###
 
-                # The asterisk unpacks all of the variables in bets_fit_parameters so that the model has all the constants it needs to calculate the y value 
-                # at the inflection point.
                 if plot_singly:
                     if len(inflection_points_1trig)>0:
                         inflection = plt.axvline(inflection_points_1trig[-1],color="blue",linestyle="--")
@@ -319,6 +333,23 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_ma
                 else:
                     plot = plt.scatter(construct_pHs,construct_data, color=color_map[construct], alpha = 0.2)
                 handles_and_labels[plot] = construct
+            
+            ###------plot CI band around the mean values at each pH---------------------###
+            if "2Trig" in construct:
+                plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
+            else:
+                plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
+
+            # plot raw scatter points
+            if "2Trig" in construct:
+                scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct], alpha=0.2)
+            else:
+                scatter_handle = plt.scatter(construct_pHs,construct_data, color=color_map[construct], alpha=0.2)
+
+            # mean points with Bonferroni error bars
+            plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
+            ###--------------------------------------------------------------------------###
+
             if plot_singly:
                 if len(proteins_and_tests)==1:
                     plt.title(f'{protein_constructs[0]} {tests[0]}')
@@ -365,6 +396,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_ma
                     plt.title(f'{protein_constructs[0]} {tests[0]} vs. {tests[1]}')
                     plt.ylabel(tests[0])
                     plt.xlabel('pH')
+
             handles = [handle for handle in handles_and_labels]
             labels = [label for handle in handles_and_labels for label in [handles_and_labels[handle]]]
             plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
