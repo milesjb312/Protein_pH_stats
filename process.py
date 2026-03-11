@@ -123,17 +123,17 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
         # In summary, this for loop iterates through each data point measured on the nanodrop (all of the data points are in the data dictionary) and adds each data point
         # to the new constructs_by_pH_by_date dictionary attached to three keys (construct, pH, date).
     constructs_by_pH_by_date = {}
-    for i in range(len(data[data_quality])):
-        construct = data['protein construct'][i]
-        pH = data['pH'][i]
-        date = data['date'][i]
-        measurement = data[data_quality][i]
+    for replicate in range(len(data['protein construct'])):
+        construct = data['protein construct'][replicate]
+        pH = data['pH'][replicate]
+        date = data['date'][replicate]
+        measurement = data[data_quality][replicate]
         if construct not in constructs_by_pH_by_date:
             constructs_by_pH_by_date[construct] = {}
         if pH not in constructs_by_pH_by_date[construct]:
-            constructs_by_pH_by_date[construct][pH] = {"dates: {}"}
+            constructs_by_pH_by_date[construct][pH] = {"dates": {}}
         if date not in constructs_by_pH_by_date[construct][pH]["dates"]:
-            constructs_by_pH_by_date[construct][pH][date]["dates"][date] = []
+            constructs_by_pH_by_date[construct][pH]["dates"][date] = []
         constructs_by_pH_by_date[construct][pH]["dates"][date].append(measurement)
       
     # Compute the 95% CI Band for each pH value within each construct
@@ -215,15 +215,14 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
     if plot==True:
         handles_and_labels = {}
 
-
         def change_colors():
             keys_1trig = []
             keys_2trig = []
-            for protein in grouped_dict:
-                if "2Trig" in (protein.split("_")[0]):
-                        keys_2trig.append(protein)
+            for construct in constructs_by_pH_by_date:
+                if "2Trig" in construct:
+                    keys_2trig.append(construct)
                 else:
-                    keys_1trig.append(protein)
+                    keys_1trig.append(construct)
             def shade_list(cmap, n, lo=0.25, hi=0.9):
                 if n<= 1:
                     return [cmap((lo + hi) / 2)]
@@ -231,64 +230,81 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
             blue_shades = shade_list(plt.cm.Blues, len(keys_1trig))
             orange_shades = shade_list(plt.cm.Oranges, len(keys_2trig))
             color_map = {}
-            for protein, color in zip(sorted(keys_1trig), blue_shades):
-                color_map[protein] = color
-            for protein, color in zip(sorted(keys_2trig), orange_shades):
-                color_map[protein] = color
+            for construct, color in zip(sorted(keys_1trig), blue_shades):
+                color_map[construct] = color
+            for construct, color in zip(sorted(keys_2trig), orange_shades):
+                color_map[construct] = color
             return color_map
         color_map = change_colors()
 
         inflection_points_1trig = []
         inflection_points_2trig = []
 
-        for construct_and_date in grouped_dict:
+        for construct in constructs_by_pH_by_date:
             try:
-                print(f'Construct_and_date: {construct_and_date}')
+                print(f'Construct: {construct}')
                 pH_values = []
-                #medians = []
                 means = []
-                means.append(mean)
-                #median = np.median(grouped_dict[construct_and_date][pH])
-                #medians.append(median)             
+                ci_lower_bounds = []
+                ci_upper_bounds = []
+                construct_pHs =[]
+                construct_data = []
+                # sort pHs numerically
+                sorted_pHs = sorted(constructs_by_pH_by_date[construct].keys(), key=float)
+                for pH in sorted_pHs:
+                    pH_entry = constructs_by_pH_by_date[construct][pH]
+                    pH_values.append(float(pH))
+                    means.append(pH_entry["mean"])
+                    ci_lower_bounds.append(pH_entry["CI_lower"])
+                    ci_upper_bounds.append(pH_entry["CI_upper"])
+                    # raw measurements for scatter plotting
+                    for date, measurements in pH_entry["dates"].items():
+                        for measurement in measurements:
+                            construct_pHs.append(float(pH))
+                            construct_data.append(measurement)
+
                 pH_linspace = np.linspace(min(pH_values),max(pH_values),400)
-                #print(f'medians: {medians}')
-                #stats.mannwhitneyu()
-                #initial_guesses = [max(medians),-4,5.5,min(medians)]
                 initial_guesses = [max(means),-4,5.5,min(means)]
                 #The returned values from the curve_fit match the order of those passed in as initial guesses, namely: [max,slope,inflection point,min]
                 best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,means,p0=initial_guesses)
-                #if "/" in construct_and_date:
-                if "2Trig" in construct_and_date and best_fit_parameters[2] > 4.0:
+
+                if "2Trig" in construct and best_fit_parameters[2] > 4.0:
                     inflection_points_2trig.append(best_fit_parameters[2])
-                elif "2Trig" in construct_and_date and best_fit_parameters[2] < 4.0:
+                elif "2Trig" in construct and best_fit_parameters[2] < 4.0:
                     inflection_points_2trig.append(float(4.0))
-                elif not "2Trig" in construct_and_date and best_fit_parameters[2] < 4.0:
+                elif not "2Trig" in construct and best_fit_parameters[2] < 4.0:
                     inflection_points_1trig.append(float(4.0))
                 else:
                     inflection_points_1trig.append(best_fit_parameters[2])
 
                 #don't plot the curve_fit if the inflection point is below 4.0
                 if best_fit_parameters[2] < 4.0:
-                    raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct_and_date} below 4.0")
-                if "2Trig" in construct_and_date:
-                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--", color=color_map[construct_and_date])
+                    raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct} below 4.0")
+                
+                if "2Trig" in construct:
+                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--", color=color_map[construct])
                 else:
-                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters), color=color_map[construct_and_date])
+                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters), color=color_map[construct])
+
                 line_handle = plot[0]
-                construct_pHs = []
-                construct_data = []
-                for pH in grouped_dict[construct_and_date]:
-                    for replicate in grouped_dict[construct_and_date][pH]:
-                        construct_pHs.append(float(pH))
-                        construct_data.append(replicate)
-                scatter_handle = None
-                if "/" in construct_and_date:
-                    if "2Trig" in construct_and_date:
-                        scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct_and_date])
-                    else:
-                        scatter_handle = plt.scatter(construct_pHs,construct_data, color=color_map[construct_and_date])
-                #The asterisk unpacks all of the variables in bets_fit_parameters so that the model has all the constants it needs to calculate the y value 
-                #at the inflection point.
+
+                # plot CI band around the mean values at each pH
+                if "2Trig" in construct:
+                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
+                else:
+                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
+
+                # plot raw scatter points
+                if "2Trig" in construct:
+                    scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct], alpha=0.2)
+                else:
+                    scatter_handle = plt.scatter(construct_pHs,construct_data, color=color_map[construct], alpha=0.2)
+
+                # mean points with Bonferroni error bars
+                plt.errorbar(pH_values, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
+
+                # The asterisk unpacks all of the variables in bets_fit_parameters so that the model has all the constants it needs to calculate the y value 
+                # at the inflection point.
                 if plot_singly:
                     if len(inflection_points_1trig)>0:
                         inflection = plt.axvline(inflection_points_1trig[-1],color="blue",linestyle="--")
@@ -296,30 +312,31 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
                     if len(inflection_points_2trig)>0:
                         inflection_2 = plt.axvline(inflection_points_2trig[-1],color="red",linestyle="--")
                         handles_and_labels[inflection_2] = f"Inflection point at: {inflection_points_2trig[-1].round(2)}"
-                if scatter_handle is not None:
-                    handles_and_labels[(line_handle, scatter_handle)] = construct_and_date
-                else:
-                    handles_and_labels[line_handle] = construct_and_date
+                
+                handles_and_labels[(line_handle, scatter_handle)] = construct
+
             except Exception as e:
                 #print(f'The curve fit for {construct_and_date} failed due to: {e}. Plotting points instead of fitted curve...')
                 construct_pHs = []
                 construct_data = []
-                for pH in grouped_dict[construct_and_date]:
-                    for replicate in grouped_dict[construct_and_date][pH]:
-                        construct_pHs.append(float(pH))
-                        construct_data.append(replicate)
-                if "2Trig" in construct_and_date:
-                    plot = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct_and_date])
+                sorted_pHs = sorted(constructs_by_pH_by_date[construct].keys(), key=float)
+                for pH in sorted_pHs:
+                    for date, measurements in constructs_by_pH_by_date[construct][pH]["dates"].items():
+                        for measurement in measurements:
+                            construct_pHs.append(float(pH))
+                            construct_data.append(measurement)
+                if "2Trig" in construct:
+                    plot = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct], alpha = 0.2)
                 else:
-                    plot = plt.scatter(construct_pHs,construct_data, color=color_map[construct_and_date])
-                handles_and_labels[plot] = construct_and_date
+                    plot = plt.scatter(construct_pHs,construct_data, color=color_map[construct], alpha = 0.2)
+                handles_and_labels[plot] = construct
             if plot_singly:
                 if len(proteins_and_tests)==1:
                     plt.title(f'{protein_constructs[0]} {tests[0]}')
                     plt.ylabel(tests[0])
                     plt.xlabel('pH')
                 handles = [handle for handle in handles_and_labels]
-                labels = [label for handle in handles_and_labels for label in [handles_and_labels[handle]]]
+                labels = [handles_and_labels[handle] for handle in handles_and_labels]
                 plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
                 #plt.savefig(f'{construct_and_date.replace("/","_")}.png',dpi=300,bbox_inches="tight")
                 plt.show()
@@ -374,7 +391,7 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
 #        statisticize([(f'2Trig-{protein_construct}','A400')],boxplot=False,plot=True,plot_singly=True)
 
 for protein_construct in protein_dict:
-#    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single vs. Double-trigger A400
 #        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
         statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
