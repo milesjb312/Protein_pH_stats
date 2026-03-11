@@ -131,17 +131,17 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
         if construct not in constructs_by_pH_by_date:
             constructs_by_pH_by_date[construct] = {}
         if pH not in constructs_by_pH_by_date[construct]:
-            constructs_by_pH_by_date[construct][pH] = {}
-        if date not in constructs_by_pH_by_date[construct][pH]:
-            constructs_by_pH_by_date[construct][pH][date] = []
-        constructs_by_pH_by_date[construct][pH][date].append(measurement)
+            constructs_by_pH_by_date[construct][pH] = {"dates: {}"}
+        if date not in constructs_by_pH_by_date[construct][pH]["dates"]:
+            constructs_by_pH_by_date[construct][pH][date]["dates"][date] = []
+        constructs_by_pH_by_date[construct][pH]["dates"][date].append(measurement)
       
     # Compute the 95% CI Band for each pH value within each construct
     alpha_bonferroni = 0.05/11
     for construct in constructs_by_pH_by_date:
         for pH in constructs_by_pH_by_date[construct]:
             # Eli Note: The line below gives back a list of lists. Each list is a replicate and their list includes the measurements from the nanodrop.
-            replicates = list(constructs_by_pH_by_date[construct][pH].values())
+            replicates = list(constructs_by_pH_by_date[construct][pH]["dates"].values())
             numerator = 0.0
             df = 0
             all_measurements = []
@@ -187,9 +187,10 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
                         grouped_dict[construct_and_date] = {pH:[max(data[data_quality][replicate],0.0)]}
     """
 
+    """
     def require_matched_groups():
-        """This function is meant to be used when comparing two tests of the same biological replicate. It gets rid of biological replicates with only one of
-        the tests."""
+        #This function is meant to be used when comparing two tests of the same biological replicate. It gets rid of biological replicates with only one of
+        #the tests.
         new_grouped_dict = {}
         date_counts = {}
         for construct_and_date in grouped_dict:
@@ -205,7 +206,8 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
 
     if require_matched_groups_var:
         grouped_dict = require_matched_groups()
-
+    """
+        
     def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
         #This is the model that we're going to try to fit using scipy's curve_fit function.
         return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
@@ -213,7 +215,7 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
     if plot==True:
         handles_and_labels = {}
 
-        
+
         def change_colors():
             keys_1trig = []
             keys_2trig = []
@@ -240,42 +242,14 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
         inflection_points_2trig = []
 
         for construct_and_date in grouped_dict:
-            """
-            plt.fill_between(
-                fitted_curve,
-                fitted_curve - lower_confidence_limit,
-                fitted_curve + upper_confidence_limit,
-                color=color_band,
-                alpha=0.45,
-                label="95% CI band",
-            )"""
             try:
                 print(f'Construct_and_date: {construct_and_date}')
-                # This is where we calculate the 95% CI at each pH for the dataset containing all of the replicates. We need to do this for each pH.
                 pH_values = []
                 #medians = []
                 means = []
                 means.append(mean)
                 #median = np.median(grouped_dict[construct_and_date][pH])
-                #medians.append(median)
-                
-                """                
-                    alpha_bonferroni = 0.05/11
-                    N_replicates = len(pH)
-                    numerator = 0.0
-                    df = 0    
-                    for rep in pH:
-                        n_rep = len(rep)
-                        s_rep = np.std(rep, ddof=1)
-                        numerator += ((n_rep - 1)*(s_rep**2))
-                        df += (n_rep - 1)
-                    pooled_sd = np.sqrt(numerator/df)
-                    SE = pooled_sd/(np.sqrt(N_replicates))
-                    t_stat = t.ppf(1-(alpha_bonferroni/2),df=df)
-                    error_bar = SE*t_stat
-                    pH_CI_band(pH).append(error_bar)
-                    """                
-                
+                #medians.append(median)             
                 pH_linspace = np.linspace(min(pH_values),max(pH_values),400)
                 #print(f'medians: {medians}')
                 #stats.mannwhitneyu()
