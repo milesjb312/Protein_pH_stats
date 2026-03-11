@@ -135,6 +135,38 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
         if date not in constructs_by_pH_by_date[construct][pH]:
             constructs_by_pH_by_date[construct][pH][date] = []
         constructs_by_pH_by_date[construct][pH][date].append(measurement)
+      
+    # Compute the 95% CI Band for each pH value within each construct
+    alpha_bonferroni = 0.05/11
+    for construct in constructs_by_pH_by_date:
+        for pH in constructs_by_pH_by_date[construct]:
+            # Eli Note: The line below gives back a list of lists. Each list is a replicate and their list includes the measurements from the nanodrop.
+            replicates = list(constructs_by_pH_by_date[construct][pH].values())
+            numerator = 0.0
+            df = 0
+            all_measurements = []
+            for rep in replicates:
+                rep = np.array(rep, dtype=float)
+                all_measurements.extend(rep)
+                n_rep = len(rep)
+                s_rep = np.std(rep, ddof=1)
+                numerator += ((n_rep - 1)*(s_rep**2)) 
+                df += (n_rep - 1)
+            N_replicates = len(all_measurements)
+            pooled_sd = np.sqrt(numerator/df)
+            SE = pooled_sd/(np.sqrt(N_replicates))
+            t_stat = t.ppf(1-(alpha_bonferroni/2),df=df)
+            error_bar = SE*t_stat
+            mean_value = np.mean(all_measurements)
+            constructs_by_pH_by_date[construct][pH]["mean"] = mean_value
+            constructs_by_pH_by_date[construct][pH]["pooled_sd"] = pooled_sd
+            constructs_by_pH_by_date[construct][pH]["SE"] = SE
+            constructs_by_pH_by_date[construct][pH]["t_stat"] = t_stat
+            constructs_by_pH_by_date[construct][pH]["error_bar"] = error_bar
+            constructs_by_pH_by_date[construct][pH]["CI_lower"] = mean_value - error_bar
+            constructs_by_pH_by_date[construct][pH]["CI_upper"] = mean_value + error_bar
+            constructs_by_pH_by_date[construct][pH]["df"] = df
+            constructs_by_pH_by_date[construct][pH]["N"] = N_replicates
 
     """
     for pH in pHs:
@@ -219,7 +251,6 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
             try:
                 print(f'Construct_and_date: {construct_and_date}')
                 # This is where we calculate the 95% CI at each pH for the dataset containing all of the replicates. We need to do this for each pH.
-                pH_CI_band = {}
                 pH_values = []
                 #medians = []
                 means = []
