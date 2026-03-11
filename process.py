@@ -167,6 +167,7 @@ def statisticize(proteins_and_tests:list,boxplot=False,plot_singly=False,plot=Fa
             constructs_by_pH_by_date[construct][pH]["CI_upper"] = mean_value + error_bar
             constructs_by_pH_by_date[construct][pH]["df"] = df
             constructs_by_pH_by_date[construct][pH]["N"] = N_replicates
+    #print(constructs_by_pH_by_date)
 
     """
     for pH in pHs:
