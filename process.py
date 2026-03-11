@@ -42,7 +42,7 @@ with open('data.csv',newline="") as csvfile:
             else:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(row['A280_48-72hr']))
 
-def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_matched_groups_var=False,tailored=False,pool=False):
+def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=False,pool=False):
     """
     Normally, you should pass only one test and one protein construct into 'proteins_and_tests', in the form of a list of tuples, where the
     tuple looks like: (protein_construct,test)
@@ -171,45 +171,6 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,require_ma
             constructs_by_pH_by_date[construct][pH]["CI_upper"] = mean_value + error_bar
             constructs_by_pH_by_date[construct][pH]["N"] = N_replicates
     #print(constructs_by_pH_by_date)
-
-    """
-    for pH in pHs:
-        for replicate in range(len(data[data_quality])):
-            if type(data[data_quality][replicate])==float:
-                if pH == data['pH'][replicate]:
-                    if len(tests)==2:
-                        construct_and_date = data['protein construct'][replicate]+"_"+data['date'][replicate]+"_"+data['test'][replicate]
-                    else:
-                        construct_and_date = data['protein construct'][replicate]+"_"+data['date'][replicate]
-                    if construct_and_date in grouped_dict:
-                        if pH in grouped_dict[construct_and_date]:
-                            grouped_dict[construct_and_date][pH].append(max(data[data_quality][replicate],0.0))
-                        else:
-                            grouped_dict[construct_and_date][pH] = [max(data[data_quality][replicate],0.0)]
-                    else:
-                        grouped_dict[construct_and_date] = {pH:[max(data[data_quality][replicate],0.0)]}
-    """
-
-    """
-    def require_matched_groups():
-        #This function is meant to be used when comparing two tests of the same biological replicate. It gets rid of biological replicates with only one of
-        #the tests.
-        new_grouped_dict = {}
-        date_counts = {}
-        for construct_and_date in grouped_dict:
-            date=construct_and_date.split("_")[1]
-            if date in date_counts:
-                date_counts[date]+=1
-            else:
-                date_counts[date]=1
-        for construct_and_date in grouped_dict:
-            if date_counts[construct_and_date.split("_")[1]]>=2:
-                new_grouped_dict[construct_and_date] = grouped_dict[construct_and_date]
-        return new_grouped_dict
-
-    if require_matched_groups_var:
-        grouped_dict = require_matched_groups()
-    """
         
     def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
         #This is the model that we're going to try to fit using scipy's curve_fit function.
@@ -432,7 +393,7 @@ for protein_construct in protein_dict:
         #Single vs. Double-trigger A280_48-72hr
         statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],plot=True)
         #A280 1hr vs 48-72 hr
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True,require_matched_groups_var=True)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True)
 
 #Single trigger TV-vWA A400
 statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
