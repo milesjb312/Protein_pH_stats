@@ -259,13 +259,15 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
 
                 # plot raw scatter points
+                jitter_strength = 0.05
+                jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
                 if "2Trig" in construct:
-                    scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct], alpha=0.2)
+                    scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct], alpha=0.2)
                 else:
-                    scatter_handle = plt.scatter(construct_pHs,construct_data, color=color_map[construct], alpha=0.2)
+                    scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct], alpha=0.2)
 
                 # mean points with Bonferroni error bars
-                plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
+                #plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
                 ###--------------------------------------------------------------------------###
 
                 if plot_singly:
@@ -288,10 +290,12 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         for measurement in measurements:
                             construct_pHs.append(float(pH))
                             construct_data.append(measurement)
+                jitter_strength = 0.05
+                jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
                 if "2Trig" in construct:
-                    plot = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct], alpha = 0.2)
+                    scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct], alpha=0.2)
                 else:
-                    plot = plt.scatter(construct_pHs,construct_data, color=color_map[construct], alpha = 0.2)
+                    scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct], alpha=0.2)
                 handles_and_labels[plot] = construct
             
             ###------plot CI band around the mean values at each pH---------------------###
@@ -301,13 +305,15 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
 
             # plot raw scatter points
+            jitter_strength = 0.05
+            jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
             if "2Trig" in construct:
-                scatter_handle = plt.scatter(construct_pHs,construct_data,marker="^", color=color_map[construct], alpha=0.2)
+                scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct], alpha=0.2)
             else:
-                scatter_handle = plt.scatter(construct_pHs,construct_data, color=color_map[construct], alpha=0.2)
+                scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct], alpha=0.2)
 
             # mean points with Bonferroni error bars
-            plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
+            #plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
             ###--------------------------------------------------------------------------###
 
             if plot_singly:
@@ -365,14 +371,14 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             plt.close()
 
 
-#for protein_construct in protein_dict:
-    #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single-trigger A400
         #statisticize([(f'{protein_construct}','A400')],plot=True,plot_singly=True)
         #Double-trigger A400
         #statisticize([(f'2Trig-{protein_construct}','A400')],plot=True,plot_singly=True)
         #Single vs. Double-trigger A400
-        #statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
 
 #for protein_construct in protein_dict:
     #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
@@ -395,4 +401,4 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         #statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True)
 
 #Single trigger TV-vWA A400
-statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
+#statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
