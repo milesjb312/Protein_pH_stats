@@ -114,16 +114,27 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
     constructs_by_pH_by_date = {}
     for replicate in range(len(data['protein construct'])):
         construct = data['protein construct'][replicate]
+        test_name = data['test'][replicate]
+        construct_key = (construct, test_name)
         pH = data['pH'][replicate]
         date = data['date'][replicate]
         measurement = data[data_quality][replicate]
-        if construct not in constructs_by_pH_by_date:
-            constructs_by_pH_by_date[construct] = {}
-        if pH not in constructs_by_pH_by_date[construct]:
-            constructs_by_pH_by_date[construct][pH] = {"dates": {}}
-        if date not in constructs_by_pH_by_date[construct][pH]["dates"]:
-            constructs_by_pH_by_date[construct][pH]["dates"][date] = []
-        constructs_by_pH_by_date[construct][pH]["dates"][date].append(measurement)
+        if construct_key not in constructs_by_pH_by_date:
+            constructs_by_pH_by_date[construct_key] = {}
+        if pH not in constructs_by_pH_by_date[construct_key]:
+            constructs_by_pH_by_date[construct_key][pH] = {"dates": {}}
+        if date not in constructs_by_pH_by_date[construct_key][pH]["dates"]:
+            constructs_by_pH_by_date[construct_key][pH]["dates"][date] = []
+        constructs_by_pH_by_date[construct_key][pH]["dates"][date].append(measurement)
+
+    biological_n_by_construct = {}
+
+    for construct in constructs_by_pH_by_date:
+        unique_dates = set()
+        for pH in constructs_by_pH_by_date[construct]:
+            for date in constructs_by_pH_by_date[construct][pH]["dates"]:
+                unique_dates.add(date)
+        biological_n_by_construct[construct] = len(unique_dates)
       
     # Compute the 95% CI Band for each pH value within each construct
     alpha_bonferroni = 0.05/11
@@ -181,21 +192,28 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         def change_colors():
             keys_1trig = []
             keys_2trig = []
-            for construct in constructs_by_pH_by_date:
-                if "2Trig" in construct:
-                    keys_2trig.append(construct)
+            keys_48_hour = []
+            for construct_key in constructs_by_pH_by_date:
+                construct, test_name = construct_key
+                if test_name == "A280_48-72hr":
+                    keys_48_hour.append(construct_key)
+                elif "2Trig" in construct:
+                    keys_2trig.append(construct_key)
                 else:
-                    keys_1trig.append(construct)
+                    keys_1trig.append(construct_key)
             def shade_list(cmap, n, lo=0.25, hi=0.9):
                 if n<= 1:
                     return [cmap((lo + hi) / 2)]
                 return [cmap(x) for x in np.linspace(lo, hi, n)]
             blue_shades = shade_list(plt.cm.Blues, len(keys_1trig))
             orange_shades = shade_list(plt.cm.Oranges, len(keys_2trig))
+            crimson_shades = shade_list(plt.cm.PuRd, len(keys_48_hour))
             color_map = {}
             for construct, color in zip(sorted(keys_1trig), blue_shades):
                 color_map[construct] = color
             for construct, color in zip(sorted(keys_2trig), orange_shades):
+                color_map[construct] = color
+            for construct, color in zip(sorted(keys_48_hour), crimson_shades):
                 color_map[construct] = color
             return color_map
         color_map = change_colors()
@@ -203,7 +221,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         inflection_points_1trig = []
         inflection_points_2trig = []
 
-        for construct in constructs_by_pH_by_date:
+        for construct_key in constructs_by_pH_by_date:
+            construct, test_name = construct_key
             pH_values = []
             means = []
             ci_lower_bounds = []
@@ -211,9 +230,9 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             construct_pHs =[]
             construct_data = []
             # sort pHs numerically
-            sorted_pHs = sorted(constructs_by_pH_by_date[construct].keys(), key=float)
+            sorted_pHs = sorted(constructs_by_pH_by_date[construct_key].keys(), key=float)
             for pH in sorted_pHs:
-                pH_entry = constructs_by_pH_by_date[construct][pH]
+                pH_entry = constructs_by_pH_by_date[construct_key][pH]
                 pH_values.append(float(pH))
                 means.append(pH_entry["mean"])
                 ci_lower_bounds.append(pH_entry["CI_lower"])
@@ -246,25 +265,27 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct} below 4.0")
                 
                 if "2Trig" in construct:
-                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--", color=color_map[construct])
+                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--", color=color_map[construct_key])
                 else:
-                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters), color=color_map[construct])
+                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters), color=color_map[construct_key])
 
                 line_handle = plot[0]
 
                 ###------plot CI band around the mean values at each pH---------------------###
-                if "2Trig" in construct:
+                if test_name == "A280_48-72hr":
+                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
+                elif "2Trig" in construct:
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
                 else:
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
 
                 # plot raw scatter points
-                jitter_strength = 0.05
+                jitter_strength = 0.08
                 jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
                 if "2Trig" in construct:
-                    scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct], alpha=0.2)
+                    scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct_key], alpha=0.2)
                 else:
-                    scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct], alpha=0.2)
+                    scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct_key], alpha=0.2)
 
                 # mean points with Bonferroni error bars
                 #plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
@@ -273,44 +294,58 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 if plot_singly:
                     if len(inflection_points_1trig)>0:
                         inflection = plt.axvline(inflection_points_1trig[-1],color="blue",linestyle="--")
-                        handles_and_labels[inflection] = f"Inflection point at: {inflection_points_1trig[-1].round(2)}"
+                        handles_and_labels[inflection] = f"Inflection point: pH = {inflection_points_1trig[-1].round(2)}"
                     if len(inflection_points_2trig)>0:
                         inflection_2 = plt.axvline(inflection_points_2trig[-1],color="red",linestyle="--")
-                        handles_and_labels[inflection_2] = f"Inflection point at: {inflection_points_2trig[-1].round(2)}"
+                        handles_and_labels[inflection_2] = f"Inflection point: pH = {inflection_points_2trig[-1].round(2)}"
                 
-                handles_and_labels[(line_handle, scatter_handle)] = construct
+                if test_name == "A280_1hr":
+                    time_label = "1 hr"
+                elif test_name == "A280_48-72hr":
+                    time_label = "48 hr"
+                else:
+                    time_label = ""
+                handles_and_labels[(line_handle, scatter_handle)] = f"{construct} {time_label} (n = {biological_n_by_construct[construct_key]})"
 
             except Exception as e:
-                #print(f'The curve fit for {construct_and_date} failed due to: {e}. Plotting points instead of fitted curve...')
+                print(f'The curve fit for {construct} failed due to: {e}. Plotting points instead of fitted curve...')
                 construct_pHs = []
                 construct_data = []
-                sorted_pHs = sorted(constructs_by_pH_by_date[construct].keys(), key=float)
+                sorted_pHs = sorted(constructs_by_pH_by_date[construct_key].keys(), key=float)
                 for pH in sorted_pHs:
-                    for date, measurements in constructs_by_pH_by_date[construct][pH]["dates"].items():
+                    for date, measurements in constructs_by_pH_by_date[construct_key][pH]["dates"].items():
                         for measurement in measurements:
                             construct_pHs.append(float(pH))
                             construct_data.append(measurement)
-                jitter_strength = 0.05
+                jitter_strength = 0.08
                 jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
                 if "2Trig" in construct:
-                    scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct], alpha=0.2)
+                    scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct_key], alpha=0.2)
                 else:
-                    scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct], alpha=0.2)
-                handles_and_labels[plot] = construct
+                    scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct_key], alpha=0.2)
+                if test_name == "A280_1hr":
+                    time_label = "1 hr"
+                elif test_name == "A280_48-72hr":
+                    time_label = "48 hr"
+                else:
+                    time_label = ""
+                handles_and_labels[(line_handle, scatter_handle)] = f"{construct} {time_label} (n = {biological_n_by_construct[construct_key]})"
             
             ###------plot CI band around the mean values at each pH---------------------###
-            if "2Trig" in construct:
+            if test_name == "A280_48-72hr":
+                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
+            elif "2Trig" in construct:
                 plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
             else:
                 plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
 
             # plot raw scatter points
-            jitter_strength = 0.05
+            jitter_strength = 0.08
             jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
             if "2Trig" in construct:
-                scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct], alpha=0.2)
+                scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct_key], alpha=0.2)
             else:
-                scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct], alpha=0.2)
+                scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct_key], alpha=0.2)
 
             # mean points with Bonferroni error bars
             #plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
@@ -323,7 +358,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     plt.xlabel('pH')
                 handles = [handle for handle in handles_and_labels]
                 labels = [handles_and_labels[handle] for handle in handles_and_labels]
-                plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
+                plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="center left",bbox_to_anchor=(1.02,0.5))
                 #plt.savefig(f'{construct_and_date.replace("/","_")}.png',dpi=300,bbox_inches="tight")
                 plt.show()
                 plt.close()
@@ -333,18 +368,18 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             if len(inflection_points_1trig)>1:
                 single_trigger_inflection_point = np.mean(inflection_points_1trig)
                 inflection_1 = plt.axvline(single_trigger_inflection_point,color="blue",linestyle="--")
-                handles_and_labels[inflection_1] = f"Inflection point at: {single_trigger_inflection_point.round(2)}"
+                handles_and_labels[inflection_1] = f"Inflection point: pH ={single_trigger_inflection_point.round(2)}"
             elif len(inflection_points_1trig)==1:
                 inflection_1 = plt.axvline(inflection_points_1trig[0],color='blue',linestyle="--")
-                handles_and_labels[inflection_1] = f"Inflection point at: {np.float64(inflection_points_1trig[0]).round(2)}"
+                handles_and_labels[inflection_1] = f"Inflection point: pH = {np.float64(inflection_points_1trig[0]).round(2)}"
 
             if len(inflection_points_2trig)>1:
                 double_trigger_inflection_point = np.mean(inflection_points_2trig)
                 inflection_2 = plt.axvline(double_trigger_inflection_point,color="red",linestyle="--")
-                handles_and_labels[inflection_2] = f"Inflection point at: {double_trigger_inflection_point.round(2)}"
+                handles_and_labels[inflection_2] = f"Inflection point: ph = {double_trigger_inflection_point.round(2)}"
             elif len(inflection_points_2trig)==1:
                 inflection_2 = plt.axvline(inflection_points_2trig[0],color='red',linestyle="--")
-                handles_and_labels[inflection_2] = f"Inflection point at: {np.float64(inflection_points_2trig[0]).round(2)}"        
+                handles_and_labels[inflection_2] = f"Inflection point: pH = {np.float64(inflection_points_2trig[0]).round(2)}"        
 
             if len(proteins_and_tests)==1:
                 plt.title(f'{protein_constructs[0]} {tests[0]}')
@@ -365,20 +400,23 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
 
             handles = [handle for handle in handles_and_labels]
             labels = [label for handle in handles_and_labels for label in [handles_and_labels[handle]]]
-            plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)})
-            #plt.savefig(f'{construct_and_date.replace("/","_")}.png',dpi=300,bbox_inches="tight")
+            if "PA-TNK1.UBA" in protein_construct and "A280_1hr" in tests:
+                plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)}, loc="lower right")
+            else:
+                plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)}, loc="upper right")
+            plt.savefig(f'{protein_construct.replace("/","_")}_{test}.png',dpi=300,bbox_inches="tight")
             plt.show()
             plt.close()
 
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+#for protein_construct in protein_dict:
+    #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single-trigger A400
         #statisticize([(f'{protein_construct}','A400')],plot=True,plot_singly=True)
         #Double-trigger A400
         #statisticize([(f'2Trig-{protein_construct}','A400')],plot=True,plot_singly=True)
         #Single vs. Double-trigger A400
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
+        #statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
 
 #for protein_construct in protein_dict:
     #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
@@ -389,8 +427,8 @@ for protein_construct in protein_dict:
         #Single vs. Double-trigger A280-1hr
         #statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
 
-#for protein_construct in protein_dict:
-    #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single-trigger A280_48-72hr
         #statisticize([(f'{protein_construct}','A280_48-72hr')],plot=True,plot_singly=True)
         #Double-trigger A280_48-72hr
@@ -398,7 +436,7 @@ for protein_construct in protein_dict:
         #Single vs. Double-trigger A280_48-72hr
         #statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],plot=True)
         #A280 1hr vs 48-72 hr
-        #statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True)
 
 #Single trigger TV-vWA A400
 #statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
