@@ -170,10 +170,9 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             constructs_by_pH_by_date[construct][pH]["CI_lower"] = mean_value - error_bar
             constructs_by_pH_by_date[construct][pH]["CI_upper"] = mean_value + error_bar
             constructs_by_pH_by_date[construct][pH]["N"] = N_replicates
-    #print(constructs_by_pH_by_date)
         
     def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
-        #This is the model that we're going to try to fit using scipy's curve_fit function.
+        #This is the model (4 Parameter Logistic, 4PL) that we're going to try to fit using scipy's curve_fit function.
         return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
 
     if plot==True:
@@ -366,34 +365,34 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             plt.close()
 
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+#for protein_construct in protein_dict:
+    #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single-trigger A400
-        statisticize([(f'{protein_construct}','A400')],plot=True,plot_singly=True)
+        #statisticize([(f'{protein_construct}','A400')],plot=True,plot_singly=True)
         #Double-trigger A400
-        statisticize([(f'2Trig-{protein_construct}','A400')],plot=True,plot_singly=True)
+        #statisticize([(f'2Trig-{protein_construct}','A400')],plot=True,plot_singly=True)
         #Single vs. Double-trigger A400
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
+        #statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+#for protein_construct in protein_dict:
+    #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single-trigger A280
-        statisticize([(f'{protein_construct}','A280_1hr')],plot=True,plot_singly=True)
+        #statisticize([(f'{protein_construct}','A280_1hr')],plot=True,plot_singly=True)
         #Double-trigger A280
-        statisticize([(f'2Trig-{protein_construct}','A280_1hr')],plot=True,plot_singly=True)
+        #statisticize([(f'2Trig-{protein_construct}','A280_1hr')],plot=True,plot_singly=True)
         #Single vs. Double-trigger A280-1hr
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
+        #statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+#for protein_construct in protein_dict:
+    #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single-trigger A280_48-72hr
-        statisticize([(f'{protein_construct}','A280_48-72hr')],plot=True,plot_singly=True)
+        #statisticize([(f'{protein_construct}','A280_48-72hr')],plot=True,plot_singly=True)
         #Double-trigger A280_48-72hr
-        statisticize([(f'2Trig-{protein_construct}','A280_48-72hr')],plot=True,plot_singly=True)
+        #statisticize([(f'2Trig-{protein_construct}','A280_48-72hr')],plot=True,plot_singly=True)
         #Single vs. Double-trigger A280_48-72hr
-        statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],plot=True)
+        #statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],plot=True)
         #A280 1hr vs 48-72 hr
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True)
+        #statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True)
 
 #Single trigger TV-vWA A400
 statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
