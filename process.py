@@ -42,6 +42,73 @@ with open('data.csv',newline="") as csvfile:
             else:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(row['A280_48-72hr']))
 
+def format_protein_title(construct_name: str) -> str:
+    name = construct_name.strip()
+
+    # Remove prefixes that should not appear in the title
+    name = name.replace("2Trig-", "")
+    name = name.replace(" (Gravity)", "")
+
+    parts = name.split("-")
+
+    # 1) tag
+    tag = "10xHis-" if parts[0] == "10xHis" else ""
+
+    # 2) scaffold
+    # You said this will always be 1TEL
+    scaffold = "1TEL"
+
+    # 3) linker
+    # Expected examples: GG, PA, SR, TV
+    linker = ""
+    if "GG" in parts:
+        linker = "GG"
+    elif "PA" in parts:
+        linker = "PA"
+    elif "SR" in parts:
+        linker = "[sr]"
+    elif "TV" in parts:
+        linker = "TV"
+
+    # 4) target protein
+    if "TNK1.UBA" in name:
+        target_protein = "TNK1.UBA"
+    elif "DARPin" in name:
+        target_protein = "DARPin"
+    elif "vWA" in name:
+        target_protein = "vWA"
+    else:
+        target_protein = "Unknown"
+
+    return f"{tag}{scaffold}-{linker}-{target_protein}"
+
+def format_legend_label(construct, test_name, protein_constructs, tests, n):
+
+    is_2trig = "2Trig" in construct
+    is_gravity = "Gravity" in construct
+    is_vwa = any(("vWA" in c) and ("2Trig" not in c) for c in protein_constructs)
+
+    has_1hr = "A280_1hr" in tests
+    has_48hr = "A280_48-72hr" in tests
+
+    # Case 1: 1Trig vs 2Trig
+    if len(protein_constructs) == 2 and len(tests) == 1:
+        if is_vwa and any("Gravity" in c for c in protein_constructs):
+            label = "Gravity" if is_gravity else "ÄKTA"
+        else:
+            label = "2Trig" if is_2trig else "1Trig"
+
+    # Case 2: 1 hr vs 48 hr
+    elif len(protein_constructs) == 1 and has_1hr and has_48hr:
+        trig_label = "2Trig" if is_2trig else "1Trig"
+        time_label = "1 Hour" if test_name == "A280_1hr" else "48 Hour"
+        label = f"{trig_label} {time_label}"
+
+    else:
+        label = construct
+
+    return f"{label} (n = {n})"
+
 def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=False,pool=False):
     """
     Normally, you should pass only one test and one protein construct into 'proteins_and_tests', in the form of a list of tuples, where the
@@ -187,19 +254,31 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
 
     if plot==True:
+        # Make legend smaller:
+            # GG A400 1 vs 2
+            # SR 1 HR 1 vs 2
+            # GG 1 HR 1 vs 2
+            # vWA 1 HR non-gravity vs gravity
+        # Legend in bottom:
+            # Why 2Trig-PA in bottom by not 1Trig 1HR vs 48 HR?
+
+        plt.figure(figsize=(8.75,6))
         handles_and_labels = {}
 
         def change_colors():
             keys_1trig = []
             keys_2trig = []
             keys_48_hour = []
+            keys_2Trig_48_hour = []
             keys_Gravity = []
             for construct_key in constructs_by_pH_by_date:
                 construct, test_name = construct_key
                 if "Gravity" in construct:
                     keys_Gravity.append(construct_key)
-                elif test_name == "A280_48-72hr":
+                elif test_name == "A280_48-72hr" and not '2Trig' in construct:
                     keys_48_hour.append(construct_key)
+                elif test_name == 'A280_48-72hr' and '2Trig' in construct:
+                    keys_2Trig_48_hour.append(construct_key)
                 elif "2Trig" in construct:
                     keys_2trig.append(construct_key)
                 else:
@@ -211,6 +290,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             blue_shades = shade_list(plt.cm.Blues, len(keys_1trig))
             orange_shades = shade_list(plt.cm.Oranges, len(keys_2trig))
             crimson_shades = shade_list(plt.cm.PuRd, len(keys_48_hour))
+            purple_shades = shade_list(plt.cm.Purples, len(keys_2Trig_48_hour))
             lime_shades = shade_list(plt.cm.YlGn, len(keys_Gravity))
             color_map = {}
             for construct, color in zip(sorted(keys_1trig), blue_shades):
@@ -218,6 +298,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             for construct, color in zip(sorted(keys_2trig), orange_shades):
                 color_map[construct] = color
             for construct, color in zip(sorted(keys_48_hour), crimson_shades):
+                color_map[construct] = color
+            for construct, color in zip(sorted(keys_2Trig_48_hour), purple_shades):
                 color_map[construct] = color
             for construct, color in zip(sorted(keys_Gravity), lime_shades):
                 color_map[construct] = color
@@ -282,8 +364,10 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 ###------plot CI band around the mean values at each pH---------------------###
                 if "Gravity" in construct:
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
-                elif test_name == "A280_48-72hr":
+                elif test_name == "A280_48-72hr" and "2Trig" not in construct:
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
+                elif test_name == "A280_48-72hr" and "2Trig" in construct:
+                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
                 elif "2Trig" in construct:
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
                 else:
@@ -292,7 +376,9 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 # plot raw scatter points
                 jitter_strength = 0.08
                 jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
-                if "2Trig" in construct:
+                if "2Trig" in construct and test_name == 'A280_48-72hr':
+                    scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct_key], alpha=0.3)
+                elif "2Trig" in construct:
                     scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct_key], alpha=0.2)
                 else:
                     scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct_key], alpha=0.2)
@@ -309,13 +395,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         inflection_2 = plt.axvline(inflection_points_2trig[-1],color="red",linestyle="--")
                         handles_and_labels[inflection_2] = f"Inflection point: pH = {inflection_points_2trig[-1].round(2)}"
                 
-                if test_name == "A280_1hr":
-                    time_label = "1 hr"
-                elif test_name == "A280_48-72hr":
-                    time_label = "48 hr"
-                else:
-                    time_label = ""
-                handles_and_labels[(line_handle, scatter_handle)] = f"{construct} {time_label} (n = {biological_n_by_construct[construct_key]})"
+                legend_label = format_legend_label(construct,test_name,protein_constructs,tests,biological_n_by_construct[construct_key])
+                handles_and_labels[(line_handle, scatter_handle)] = legend_label
 
             except Exception as e:
                 print(f'The curve fit for {construct} failed due to: {e}. Plotting points instead of fitted curve...')
@@ -329,25 +410,24 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             construct_data.append(measurement)
                 if "Gravity" in construct:
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
-                elif test_name == "A280_48-72hr":
+                elif test_name == "A280_48-72hr" and "2Trig" not in construct:
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
+                elif test_name == "A280_48-72hr" and "2Trig" in construct:
+                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
                 elif "2Trig" in construct:
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
                 else:
                     plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
                 jitter_strength = 0.08
                 jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
-                if "2Trig" in construct:
+                if "2Trig" in construct and test_name == 'A280_48-72hr':
+                    scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct_key], alpha=0.3)
+                elif "2Trig" in construct:
                     scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct_key], alpha=0.2)
                 else:
                     scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct_key], alpha=0.2)
-                if test_name == "A280_1hr":
-                    time_label = "1 hr"
-                elif test_name == "A280_48-72hr":
-                    time_label = "48 hr"
-                else:
-                    time_label = ""
-                handles_and_labels[scatter_handle] = f"{construct} {time_label} (n = {biological_n_by_construct[construct_key]})"
+                legend_label = format_legend_label(construct,test_name,protein_constructs,tests,biological_n_by_construct[construct_key])
+                handles_and_labels[scatter_handle] = legend_label
 
             # mean points with Bonferroni error bars
             #plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
@@ -400,29 +480,45 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     inflection_2 = plt.axvline(inflection_points_2trig[0],color='red',linestyle="--")
                     handles_and_labels[inflection_2] = f"Inflection point: pH = {np.float64(inflection_points_2trig[0]):.2f}"        
 
-            if len(proteins_and_tests)==1:
-                plt.title(f'{protein_constructs[0]} {tests[0]}')
-                plt.ylabel(tests[0])
-                plt.xlabel('pH')
+            if "A400" == tests[0]:
+                y_axis = 'Absorbance'
+                assay = 'Turbidity'
             else:
-                #If two different protein constructs were passed in, we want to show that they are the same. This is usually testing single vs. double trigger variants.
-                #For this test, we aggregate the biological replicates of a given protein construct whether or not they are statistically significantly different.
-                if len(protein_constructs)==2 and len(tests)==1:
-                    plt.title(f'{protein_constructs[0]} vs. {protein_constructs[1]} {tests[0]}')
-                    plt.ylabel(tests[0])
-                    plt.xlabel('pH')
-                #If the same protein construct was passed in twice with two different tests, we want to show that they are the same.
-                elif len(protein_constructs)==1 and len(tests)==2:
-                    plt.title(f'{protein_constructs[0]} {tests[0]} vs. {tests[1]}')
-                    plt.ylabel(tests[0])
-                    plt.xlabel('pH')
+                y_axis = "Precipitation Loss / mg/mL"
+                assay = 'Solubility'
+            if len(protein_constructs) == 1:
+                protein_title = format_protein_title(protein_constructs[0])
+                plt.title(f"{protein_title}, {assay}", fontsize = 14)
+                plt.ylabel(y_axis)
+                plt.xlabel("pH")
+            else:
+                if len(protein_constructs) == 2 and len(tests) == 1:
+                    # Use the first construct as the base protein title
+                    protein_title = format_protein_title(protein_constructs[0])
+                    plt.title(f"{protein_title}, {assay}", fontsize = 14)
+                    plt.ylabel(y_axis)
+                    plt.xlabel("pH")
+                elif len(protein_constructs) == 1 and len(tests) == 2:
+                    protein_title = format_protein_title(protein_constructs[0])
+                    plt.title(f"{protein_title}, {assay}", fontsize = 14)
+                    plt.ylabel(y_axis)
+                    plt.xlabel("pH")
 
             handles = [handle for handle in handles_and_labels]
             labels = [label for handle in handles_and_labels for label in [handles_and_labels[handle]]]
-            if "PA-TNK1.UBA" in protein_construct and "A280_1hr" in tests:
-                plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)}, loc="lower right")
+            is_pa = any("PA-TNK1.UBA" in construct for construct in protein_constructs)
+            is_vwa = any("vWA" in construct for construct in protein_constructs)
+            is_1hr_only = ("A280_1hr" in tests and "A280_48-72hr" not in tests)
+            is_1hr_vs_48hr = ("A280_1hr" in tests and "A280_48-72hr" in tests)
+            is_pa_1trig_vs_2trig_1hr = is_pa and len(protein_constructs) == 2 and is_1hr_only
+            is_vwa_1trig_vs_2trig_1hr = is_vwa and len(protein_constructs) == 2 and is_1hr_only
+            is_pa_1trig_1hr_vs_48hr = is_pa and len(protein_constructs) == 1 and "2Trig" not in protein_constructs[0] and is_1hr_vs_48hr
+            is_vwa_1hr_non_gravity_vs_gravity = (is_vwa and len(protein_constructs) == 2 and is_1hr_only and any("Gravity" in construct for construct in protein_constructs))
+            
+            if (is_pa_1trig_vs_2trig_1hr or is_vwa_1trig_vs_2trig_1hr or is_pa_1trig_1hr_vs_48hr or is_vwa_1hr_non_gravity_vs_gravity):
+                plt.legend(handles, labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="lower right")
             else:
-                plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)}, loc="upper right")
+                plt.legend(handles, labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
             plt.savefig(f'{protein_construct.replace("/","_")}_{test}.png',dpi=300,bbox_inches="tight")
             plt.show()
             plt.close()
@@ -454,7 +550,10 @@ for protein_construct in protein_dict:
         #statisticize([(f'2Trig-{protein_construct}','A280_48-72hr')],plot=True,plot_singly=True)
         #Single vs. Double-trigger A280_48-72hr
         #statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],plot=True)
-        #A280 1hr vs 48-72 hr
+        #Single-trigger A280 1hr vs 48-72 hr
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True)
+    elif '2Trig' in protein_construct:
+        #Double-trigger A280 1hr vs 48-72 hr
         statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True)
 
 #Single trigger TV-vWA A400, A280 1 HR, A280 48-72 HR
