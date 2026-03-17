@@ -196,10 +196,10 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             keys_Gravity = []
             for construct_key in constructs_by_pH_by_date:
                 construct, test_name = construct_key
-                if test_name == "A280_48-72hr":
-                    keys_48_hour.append(construct_key)
-                elif "Gravity" in construct:
+                if "Gravity" in construct:
                     keys_Gravity.append(construct_key)
+                elif test_name == "A280_48-72hr":
+                    keys_48_hour.append(construct_key)
                 elif "2Trig" in construct:
                     keys_2trig.append(construct_key)
                 else:
@@ -275,10 +275,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 if best_fit_parameters[2] < 4.0:
                     raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct} below 4.0")
                 
-                if "2Trig" in construct:
-                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters),linestyle="--", color=color_map[construct_key])
-                else:
-                    plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters), color=color_map[construct_key])
+                plot = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters), color=color_map[construct_key])
 
                 line_handle = plot[0]
 
@@ -330,6 +327,14 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         for measurement in measurements:
                             construct_pHs.append(float(pH))
                             construct_data.append(measurement)
+                if "Gravity" in construct:
+                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
+                elif test_name == "A280_48-72hr":
+                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
+                elif "2Trig" in construct:
+                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
+                else:
+                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
                 jitter_strength = 0.08
                 jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
                 if "2Trig" in construct:
@@ -342,7 +347,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     time_label = "48 hr"
                 else:
                     time_label = ""
-                handles_and_labels[(line_handle, scatter_handle)] = f"{construct} {time_label} (n = {biological_n_by_construct[construct_key]})"
+                handles_and_labels[scatter_handle] = f"{construct} {time_label} (n = {biological_n_by_construct[construct_key]})"
 
             # mean points with Bonferroni error bars
             #plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
@@ -365,27 +370,35 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             if not (len(protein_constructs) == 1 and ("A280_1hr" in tests and "A280_48-72hr" in tests)):
                 if len(inflection_points_1trig)>1:
                     single_trigger_inflection_point = np.mean(inflection_points_1trig)
-                    inflection_1 = plt.axvline(single_trigger_inflection_point,color="blue",linestyle="--")
-                    handles_and_labels[inflection_1] = f"Inflection point: pH ={single_trigger_inflection_point.round(2)}"
+                    if "A280_48-72hr" in tests:
+                        inflection_color = 'purple'
+                    else:
+                        inflection_color = 'blue' 
+                    inflection_1 = plt.axvline(single_trigger_inflection_point,color=inflection_color,linestyle="--")
+                    handles_and_labels[inflection_1] = f"Inflection point: pH ={single_trigger_inflection_point:.2f}"
                 elif len(inflection_points_1trig)==1:
-                    inflection_1 = plt.axvline(inflection_points_1trig[0],color='blue',linestyle="--")
-                    handles_and_labels[inflection_1] = f"Inflection point: pH = {np.float64(inflection_points_1trig[0]).round(2)}"
+                    if "A280_48-72hr" in tests:
+                        inflection_color = "purple"
+                    else:
+                        inflection_color = "blue"
+                    inflection_1 = plt.axvline(inflection_points_1trig[0],color=inflection_color,linestyle="--")
+                    handles_and_labels[inflection_1] = f"Inflection point: pH = {np.float64(inflection_points_1trig[0]):.2f}"
 
                 if len(inflection_points_Gravity) > 1:
                     gravity_inflection_point = np.mean(inflection_points_Gravity)
                     inflection_g = plt.axvline(gravity_inflection_point, color='green', linestyle='--')
-                    handles_and_labels[inflection_g] = f"Inflection point: pH = {gravity_inflection_point.round(2)}"
+                    handles_and_labels[inflection_g] = f"Inflection point: pH = {gravity_inflection_point:.2f}"
                 elif len(inflection_points_Gravity) == 1:
                     inflection_g = plt.axvline(inflection_points_Gravity[0], color="green", linestyle="--")
-                    handles_and_labels[inflection_g] = f"Inflection point: pH = {np.float64(inflection_points_Gravity[0]).round(2)}"
+                    handles_and_labels[inflection_g] = f"Inflection point: pH = {np.float64(inflection_points_Gravity[0]):.2f}"
 
                 if len(inflection_points_2trig)>1:
                     double_trigger_inflection_point = np.mean(inflection_points_2trig)
                     inflection_2 = plt.axvline(double_trigger_inflection_point,color="red",linestyle="--")
-                    handles_and_labels[inflection_2] = f"Inflection point: ph = {double_trigger_inflection_point.round(2)}"
+                    handles_and_labels[inflection_2] = f"Inflection point: ph = {double_trigger_inflection_point:.2f}"
                 elif len(inflection_points_2trig)==1:
                     inflection_2 = plt.axvline(inflection_points_2trig[0],color='red',linestyle="--")
-                    handles_and_labels[inflection_2] = f"Inflection point: pH = {np.float64(inflection_points_2trig[0]).round(2)}"        
+                    handles_and_labels[inflection_2] = f"Inflection point: pH = {np.float64(inflection_points_2trig[0]):.2f}"        
 
             if len(proteins_and_tests)==1:
                 plt.title(f'{protein_constructs[0]} {tests[0]}')
@@ -415,26 +428,26 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             plt.close()
 
 
-#for protein_construct in protein_dict:
-    #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single-trigger A400
         #statisticize([(f'{protein_construct}','A400')],plot=True,plot_singly=True)
         #Double-trigger A400
         #statisticize([(f'2Trig-{protein_construct}','A400')],plot=True,plot_singly=True)
         #Single vs. Double-trigger A400
-        #statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
+        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
 
-#for protein_construct in protein_dict:
-    #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single-trigger A280
         #statisticize([(f'{protein_construct}','A280_1hr')],plot=True,plot_singly=True)
         #Double-trigger A280
         #statisticize([(f'2Trig-{protein_construct}','A280_1hr')],plot=True,plot_singly=True)
         #Single vs. Double-trigger A280-1hr
-        #statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
 
-#for protein_construct in protein_dict:
-    #if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+for protein_construct in protein_dict:
+    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
         #Single-trigger A280_48-72hr
         #statisticize([(f'{protein_construct}','A280_48-72hr')],plot=True,plot_singly=True)
         #Double-trigger A280_48-72hr
@@ -442,7 +455,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         #Single vs. Double-trigger A280_48-72hr
         #statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],plot=True)
         #A280 1hr vs 48-72 hr
-        #statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True)
+        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True)
 
 #Single trigger TV-vWA A400, A280 1 HR, A280 48-72 HR
 statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
