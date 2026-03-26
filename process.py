@@ -1,10 +1,10 @@
 import csv
-from scipy import stats
 from scipy.optimize import curve_fit
 from scipy.stats import t
 import matplotlib.pyplot as plt
 from matplotlib.legend_handler import HandlerTuple
 import numpy as np
+from pathlib import Path
 
 #1)Pull specified constructs and their corresponding specified data from csv and put into protein_dict by calling the master function 'statisticize'. Ex.:
     #statisticize([('Construct1','A400'),('Construct2','A400')])
@@ -15,31 +15,33 @@ import numpy as np
 #First, place all the data within a dictionary, separating by protein construct, then by date/concentration/pH, then by test-type.
 protein_dict = {}
 
-with open('data.csv',newline="") as csvfile:
-    fieldnames = ['Protein Construct','Date','Stock Concentration mg/mL','pH','A400','A280_1hr','A280_48-72hr']
-    reader = csv.DictReader(csvfile,fieldnames=fieldnames)
-    next(reader)
+BASE_DIR = Path(__file__).resolve().parent
+CSV_PATH = BASE_DIR / "data.csv"
+
+with open(CSV_PATH, newline="", encoding="utf-8-sig") as csvfile:
+    reader = csv.DictReader(csvfile)
     for row in reader:
         protein_construct = row['Protein Construct'].strip()
         if protein_construct not in protein_dict:
             protein_dict[protein_construct] = {}
-        if row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH'] not in protein_dict[protein_construct]:
-            protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']] = {'A400':[],'A280_1hr':[],'A280_48-72hr':[]}
+        bio_rep_key = row['Date'] + "_" + row['Stock Concentration mg/mL'] + '_mg/mL_pH_' + row['pH']
+        if bio_rep_key not in protein_dict[protein_construct]:
+            protein_dict[protein_construct][bio_rep_key] = {'A400': [],'A280_1hr': [],'A280_48-72hr': [],'vWA ID': row.get('vWA ID', '').strip()}
         if row['A400'] != "":
             raw_value = row['A400'].strip()
-            if '*' in raw_value or '^' in raw_value:
+            if '*' in raw_value or '^' in raw_value or '~' in raw_value:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A400'].append(raw_value)
             else:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A400'].append(float(raw_value))
         if row['A280_1hr']!="":
             raw_value = row['A280_1hr'].strip()
-            if '*' in raw_value or '^' in raw_value:
+            if '*' in raw_value or '^' in raw_value or '~' in raw_value:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_1hr'].append(raw_value)
             else:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_1hr'].append(float(raw_value))
         if row['A280_48-72hr']!="":
             raw_value = row['A280_48-72hr'].strip()
-            if '*' in raw_value or '^' in raw_value:
+            if '*' in raw_value or '^' in raw_value or '~' in raw_value:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(raw_value)
             else:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(raw_value))
@@ -81,25 +83,21 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
     is_2trig = "2Trig" in construct
     is_gravity = "Gravity" in construct
     is_vwa = any(("vWA" in c) and ("2Trig" not in c) for c in protein_constructs)
-
     has_1hr = "A280_1hr" in tests
     has_48hr = "A280_48-72hr" in tests
     is_solubility = test_name in ["A280_1hr", "A280_48-72hr"]
-
     # Case 1: 1Trig vs 2Trig
     if len(protein_constructs) == 2 and len(tests) == 1:
         if is_vwa and any("Gravity" in c for c in protein_constructs):
             base_label = "Gravity" if is_gravity else "ÄKTA"
-
-            if test_name == "A280_1hr":
-                label = f"{base_label} 1 Hour"
-            elif test_name == "A280_48-72hr":
-                label = f"{base_label} 48 Hour"
-            else:
-                label = base_label
         else:
-            label = "2Trig" if is_2trig else "1Trig"
-
+            base_label = "2Trig" if is_2trig else "1Trig"
+        if test_name == "A280_1hr":
+            label = f"{base_label} 1 Hour"
+        elif test_name == "A280_48-72hr":
+            label = f"{base_label} 48 Hour"
+        else:
+            label = base_label
     # Case 2: 1 hr vs 48 hr for same construct
     elif len(protein_constructs) == 1 and has_1hr and has_48hr:
         if is_gravity:
@@ -108,24 +106,36 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
             trig_label = "2Trig" if is_2trig else "1Trig"
         time_label = "1 Hour" if test_name == "A280_1hr" else "48 Hour"
         label = f"{trig_label} {time_label}"
-
     # Case 3: single plot, one construct and one test
     elif len(protein_constructs) == 1 and len(tests) == 1:
         if is_gravity:
             base_label = "Gravity"
         else:
             base_label = "2Trig" if is_2trig else "1Trig"
-
         if is_solubility:
             time_label = "1 Hour" if test_name == "A280_1hr" else "48 Hour"
             label = f"{base_label} {time_label}"
         else:
             label = base_label
-
     else:
         label = construct
-
     return f"{label} (n = {n})"
+
+def display_inflection_x(inflection_value):
+    if inflection_value <= 4.0:
+        return 4.5
+    elif inflection_value >= 9.0:
+        return 8.5
+    else:
+        return inflection_value
+
+def format_inflection_label(prefix, inflection_value):
+    if inflection_value <= 4.0:
+        return f"{prefix}: pH ≤ 4.5"
+    elif inflection_value >= 9.0:
+        return f"{prefix}: pH ≥ 8.5"
+    else:
+        return f"{prefix}: pH = {inflection_value:.2f}"
 
 def get_dates_for_construct(protein_construct, test):
     if protein_construct not in protein_dict:
@@ -138,15 +148,43 @@ def get_dates_for_construct(protein_construct, test):
             dates.add(date)
     return sorted(dates)
 
+def behavior_label_from_vwa_id(vwa_id):
+    if vwa_id == "W1":
+        return "Behavior 1"
+    elif vwa_id == "W2":
+        return "Behavior 2"
+    return vwa_id
+
+def get_vwa_behavior_colors(base_color):
+    return {"W1": base_color,"W2": tuple(max(0, c * 0.65) for c in base_color[:3]) + (base_color[3],) if len(base_color) == 4
+              else tuple(max(0, c * 0.65) for c in base_color[:3])}
+
+def apply_custom_y_limits(protein_constructs, tests, plot_singly, specific_date=None):
+    key = (tuple(sorted(protein_constructs)), tuple(sorted(tests)))
+    single_plot_limits = {}
+    combined_plot_limits = {
+        (tuple(sorted(("1TEL-PA-TNK1.UBA", "2Trig-1TEL-PA-TNK1.UBA"))), ("A400",)): {"ymax": 5.0},
+        (tuple(sorted(("10xHis-1TEL-TV-vWA", "10xHis-1TEL-TV-vWA (Gravity)"))), ("A280_1hr",)): {"ymin": -1.0},
+        (("1TEL-GG-TNK1.UBA",), ("A280_1hr", "A280_48-72hr")): {"ymin": -1.0},
+        (("2Trig-1TEL-GG-TNK1.UBA",), ("A280_1hr", "A280_48-72hr")): {"ymin": -0.2},
+        (("1TEL-PA-TNK1.UBA",), ("A280_1hr", "A280_48-72hr")): {"ymin": -0.1},
+        (tuple(sorted(("2Trig-10xHis-1TEL-TV-vWA", "10xHis-1TEL-TV-vWA"))), ("A280_1hr",)): {"ymin": -0.8},
+        (tuple(sorted(("2Trig-1TEL-GG-TNK1.UBA", "1TEL-GG-TNK1.UBA"))), ("A280_1hr",)): {"ymin": -0.4},
+        (tuple(sorted(("2Trig-1TEL-PA-TNK1.UBA", "1TEL-PA-TNK1.UBA"))), ("A280_1hr",)): {"ymin": -0.5},
+        (tuple(sorted(("2Trig-10xHis-1TEL-SR-TNK1.UBA", "10xHis-1TEL-SR-TNK1.UBA"))), ("A400",)): {"ymin": -0.2, "ymax": 1.8},}
+    limits = single_plot_limits.get(key) if plot_singly else combined_plot_limits.get(key)
+    if limits is not None:
+        plt.ylim(bottom=limits.get("ymin"), top=limits.get("ymax"))
+
 def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=False,pool=False, specific_date=None):
     """
     Normally, you should pass only one test and one protein construct into 'proteins_and_tests', in the form of a list of tuples, where the
     tuple looks like: (protein_construct,test)
     'protein_constructs' are the protein_dict dictionary keys that refer to the particular protein constructs of interest.
-    'tests' are the types of tests you performed, referred to by the variable being measured, or the column name in the csv. Ie.: 'A400', 'A280_1hr'    
+    'tests' are the types of tests you performed, referred to by the variable being measured, or the column name in the csv. Ie.: 'A400', 'A280_1hr'
     """
     #The first half of this function is just a filter pulling applicable data from the protein_dict dictionary.
-    data = {'protein construct':[],'date':[],'pH':[],'test':[],'data':[],'tailored_data':[], 'is_starred':[], 'is_single_omitted':[]}
+    data = {'protein construct':[],'date':[],'pH':[],'test':[],'data':[],'tailored_data':[], 'is_starred':[], 'is_single_omitted':[], 'is_time_omitted':[], 'vwa_id':[]}
     protein_constructs = []
     tests = []
     for protein_construct,test in proteins_and_tests:
@@ -174,6 +212,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     pH = bio_rep.split("_")[-1]
                     data['pH'].append(pH)
                     data['test'].append(test)
+                    vwa_id = protein_dict[protein_construct][bio_rep].get('vWA ID', '').strip()
+                    data['vwa_id'].append(vwa_id)
 
                     concentration = float(bio_rep.split("_")[1])
                     #We dilute our protein by putting 200 uL into 800 uL.
@@ -192,11 +232,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         numeric_replicate = replicate
                         is_starred = False
                         is_single_omitted = False
+                        is_time_omitted = False
                     else:
                         replicate_str = replicate.strip()
                         is_starred = "*" in replicate_str
                         is_single_omitted = "^" in replicate_str
-                        numeric_replicate = float(replicate_str.replace("*", "").replace("^", ""))
+                        is_time_omitted = "~" in replicate_str
+                        numeric_replicate = float(replicate_str.replace("*", "").replace("^", "").replace("~", ""))
                     if test in ['A280_1hr', 'A280_48-72hr']:
                         value = (theoretical_max_concentration - numeric_replicate) / theoretical_max_concentration
                     else:
@@ -205,6 +247,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     data['tailored_data'].append(value)
                     data['is_starred'].append(is_starred)
                     data['is_single_omitted'].append(is_single_omitted)
+                    data['is_time_omitted'].append(is_time_omitted)
 
     #--------------------Now that the main filtering is done, it's time to make confidence intervals and fit curves for each set of construct:pH values---------------#
 
@@ -230,15 +273,19 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             constructs_by_pH_by_date[construct_key] = {}
         is_starred = data['is_starred'][replicate]
         is_single_omitted = data['is_single_omitted'][replicate]
+        is_time_omitted = data['is_time_omitted'][replicate]
         if pH not in constructs_by_pH_by_date[construct_key]:
-            constructs_by_pH_by_date[construct_key][pH] = {"dates": {},"dates_starred": {},"dates_single_omitted": {}}
+            constructs_by_pH_by_date[construct_key][pH] = {"dates": {},"dates_starred": {},"dates_single_omitted": {},"dates_time_omitted": {},"dates_vwa_id": {}}
         if date not in constructs_by_pH_by_date[construct_key][pH]["dates"]:
             constructs_by_pH_by_date[construct_key][pH]["dates"][date] = []
             constructs_by_pH_by_date[construct_key][pH]["dates_starred"][date] = []
             constructs_by_pH_by_date[construct_key][pH]["dates_single_omitted"][date] = []
+            constructs_by_pH_by_date[construct_key][pH]["dates_time_omitted"][date] = []
         constructs_by_pH_by_date[construct_key][pH]["dates"][date].append(measurement)
         constructs_by_pH_by_date[construct_key][pH]["dates_starred"][date].append(is_starred)
         constructs_by_pH_by_date[construct_key][pH]["dates_single_omitted"][date].append(is_single_omitted)
+        constructs_by_pH_by_date[construct_key][pH]["dates_time_omitted"][date].append(is_time_omitted)
+        constructs_by_pH_by_date[construct_key][pH]["dates_vwa_id"][date] = data['vwa_id'][replicate]
 
     biological_n_by_construct = {}
 
@@ -248,89 +295,119 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             for date in constructs_by_pH_by_date[construct][pH]["dates"]:
                 unique_dates.add(date)
         biological_n_by_construct[construct] = len(unique_dates)
-      
+
+    biological_n_by_construct_and_vwa = {}
+
+    for construct in constructs_by_pH_by_date:
+        biological_n_by_construct_and_vwa[construct] = {}
+        for pH in constructs_by_pH_by_date[construct]:
+            for date in constructs_by_pH_by_date[construct][pH]["dates"]:
+                vwa_id = constructs_by_pH_by_date[construct][pH]["dates_vwa_id"].get(date, "").strip()
+                if vwa_id not in biological_n_by_construct_and_vwa[construct]:
+                    biological_n_by_construct_and_vwa[construct][vwa_id] = set()
+                biological_n_by_construct_and_vwa[construct][vwa_id].add(date)
+    # convert sets to counts
+    for construct in biological_n_by_construct_and_vwa:
+        for vwa_id in biological_n_by_construct_and_vwa[construct]:
+            biological_n_by_construct_and_vwa[construct][vwa_id] = len(biological_n_by_construct_and_vwa[construct][vwa_id])
+
     # Compute the 95% CI Band for each pH value within each construct
     alpha_bonferroni = 0.05/11
     for construct in constructs_by_pH_by_date:
         for pH in constructs_by_pH_by_date[construct]:
-            # Eli Note: The line below gives back a list of lists. Each outer list is a biological replicate and each inner list includes the measurements from the nanodrop for that biological replicate.
             pH_dates = constructs_by_pH_by_date[construct][pH]["dates"]
             pH_starred = constructs_by_pH_by_date[construct][pH]["dates_starred"]
             pH_single_omitted = constructs_by_pH_by_date[construct][pH]["dates_single_omitted"]
+            pH_time_omitted = constructs_by_pH_by_date[construct][pH]["dates_time_omitted"]
 
-            if pool:
-                weighted_variances = 0.0
-                pooled_df = 0
-            all_drops_at_current_pH = []
+            all_drops_for_display = []
+            all_drops_for_fit = []
 
             for date_key in pH_dates:
                 drops = pH_dates[date_key]
                 star_flags = pH_starred[date_key]
                 single_omit_flags = pH_single_omitted[date_key]
+                time_omit_flags = pH_time_omitted[date_key]
 
-                paired = list(zip(drops, star_flags, single_omit_flags))
+                paired = list(zip(drops, star_flags, single_omit_flags, time_omit_flags))
 
-                # global omission behavior
+                # Data shown in CI band:
+                # include starred points, but still honor single-plot-only omissions
+                display_paired = paired
+
+                # Data used for fitting:
+                fit_paired = paired
                 if tailored:
-                    paired = [(d, s, so) for d, s, so in paired if not s]
-
-                # single-plot-only omission behavior
+                    fit_paired = [(d, s, so, to) for d, s, so, to in fit_paired if not s]
                 if plot_singly:
-                    paired = [(d, s, so) for d, s, so in paired if not so]
+                    fit_paired = [(d, s, so, to) for d, s, so, to in fit_paired if not so]
+                if is_time_comparison:
+                    fit_paired = [(d, s, so, to) for d, s, so, to in fit_paired if not to]
 
-                drops = [d for d, s, so in paired]
-                if len(drops) == 0:
-                    continue
-                drops = np.array(drops, dtype=float)
-                all_drops_at_current_pH.extend(drops)
-                if pool:
-                    sd_of_drops = np.std(drops, ddof=1)
-                    weighted_variances += ((len(drops) - 1)*(sd_of_drops**2))
-                    pooled_df += (len(drops) - 1)
-            if len(all_drops_at_current_pH) == 0:
-                continue
-            N_replicates = len(all_drops_at_current_pH)
-            if pool:
-                pooled_sd = np.sqrt(weighted_variances/pooled_df)
-                SE = pooled_sd/(np.sqrt(N_replicates))
-                t_stat = t.ppf(1-(alpha_bonferroni/2),df=pooled_df)
-            else:
-                sd = np.std(all_drops_at_current_pH)
-                SE = sd/(np.sqrt(N_replicates))
-                t_stat = t.ppf(1-(alpha_bonferroni/2),df=len(all_drops_at_current_pH)-1)
-            print(f'SE: {SE}')
-            error_bar = SE*t_stat
-            mean_value = np.mean(all_drops_at_current_pH)
-            constructs_by_pH_by_date[construct][pH]["mean"] = mean_value
-            if pool:
-                constructs_by_pH_by_date[construct][pH]["pooled_sd"] = pooled_sd
-                constructs_by_pH_by_date[construct][pH]["df"] = pooled_df
-            else:
-                constructs_by_pH_by_date[construct][pH]["sd"] = sd
-                constructs_by_pH_by_date[construct][pH]['df'] = len(all_drops_at_current_pH)-1
-            constructs_by_pH_by_date[construct][pH]["SE"] = SE
-            constructs_by_pH_by_date[construct][pH]["t_stat"] = t_stat
-            constructs_by_pH_by_date[construct][pH]["error_bar"] = error_bar
-            constructs_by_pH_by_date[construct][pH]["CI_lower"] = mean_value - error_bar
-            constructs_by_pH_by_date[construct][pH]["CI_upper"] = mean_value + error_bar
-            constructs_by_pH_by_date[construct][pH]["N"] = N_replicates
-        
+                display_drops = [d for d, s, so, to in display_paired]
+                fit_drops = [d for d, s, so, to in fit_paired]
+
+                if len(display_drops) > 0:
+                    all_drops_for_display.extend(np.array(display_drops, dtype=float))
+                if len(fit_drops) > 0:
+                    all_drops_for_fit.extend(np.array(fit_drops, dtype=float))
+
+            # display stats for CI
+            if len(all_drops_for_display) > 0:
+                N_display = len(all_drops_for_display)
+                sd_display = np.std(all_drops_for_display)
+                SE_display = sd_display / np.sqrt(N_display)
+                t_display = t.ppf(1 - (alpha_bonferroni / 2), df=N_display - 1)
+                error_display = SE_display * t_display
+                mean_display = np.mean(all_drops_for_display)
+
+                constructs_by_pH_by_date[construct][pH]["mean_display"] = mean_display
+                constructs_by_pH_by_date[construct][pH]["CI_lower_display"] = mean_display - error_display
+                constructs_by_pH_by_date[construct][pH]["CI_upper_display"] = mean_display + error_display
+
+            # fit stats for curve fitting
+            if len(all_drops_for_fit) > 0:
+                N_fit = len(all_drops_for_fit)
+                sd_fit = np.std(all_drops_for_fit)
+                SE_fit = sd_fit / np.sqrt(N_fit)
+                t_fit = t.ppf(1 - (alpha_bonferroni / 2), df=N_fit - 1)
+                error_fit = SE_fit * t_fit
+                mean_fit = np.mean(all_drops_for_fit)
+
+                constructs_by_pH_by_date[construct][pH]["mean"] = mean_fit
+                constructs_by_pH_by_date[construct][pH]["CI_lower"] = mean_fit - error_fit
+                constructs_by_pH_by_date[construct][pH]["CI_upper"] = mean_fit + error_fit
+                constructs_by_pH_by_date[construct][pH]["N"] = N_fit
+
     def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
         #This is the model (4 Parameter Logistic, 4PL) that we're going to try to fit using scipy's curve_fit function.
         return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
 
-    if plot==True:
-        # Make legend smaller:
-            # GG A400 1 vs 2
-            # SR 1 HR 1 vs 2
-            # GG 1 HR 1 vs 2
-            # vWA 1 HR non-gravity vs gravity
-        # Legend in bottom:
-            # Why 2Trig-PA in bottom by not 1Trig 1HR vs 48 HR?
+    def classify_legend_group(construct, test_name, protein_constructs, tests):
+        is_gravity_comparison = (len(protein_constructs) == 2 and len(tests) == 1 and any("Gravity" in c for c in protein_constructs))
+        is_time_comparison = (len(protein_constructs) == 1 and "A280_1hr" in tests and "A280_48-72hr" in tests)
 
+        if is_gravity_comparison:
+            if "Gravity" in construct:
+                return "group2"
+            return "group1"  # ÄKTA first
+
+        if is_time_comparison:
+            if test_name == "A280_48-72hr":
+                return "group2"
+            return "group1"  # 1 Hour first
+
+        # default: 1Trig vs 2Trig
+        if "2Trig" in construct:
+            return "group2"
+        return "group1"
+
+    if plot==True:
         plt.figure(figsize=(8.75,6))
         handles_and_labels = {}
-
+        inflection_handles_and_labels = {}
+        legend_groups = {"group1_main": [],"group1_inflection": [],"group1_ci": [],"group2_main": [],"group2_inflection": [],"group2_ci": [],"other": []}
+        is_combined_vwa_1hr_solubility = (len(protein_constructs) == 2 and len(tests) == 1 and tests[0] == "A280_1hr" and "10xHis-1TEL-TV-vWA" in protein_constructs)
         def change_colors():
             keys_1trig = []
             keys_2trig = []
@@ -382,90 +459,195 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         for construct_key in constructs_by_pH_by_date:
             any_starred_points = False
             construct, test_name = construct_key
-            pH_values = []
-            means = []
+            is_special_vwa_construct = (is_combined_vwa_1hr_solubility and test_name == "A280_1hr" and "vWA" in construct and "2Trig" not in construct and "Gravity" not in construct)
+            pH_values_fit = []
+            means_fit = []
+            pH_values_display = []
             ci_lower_bounds = []
             ci_upper_bounds = []
             construct_pHs =[]
             construct_data = []
             construct_starred = []
             construct_single_omitted = []
+            construct_vwa_ids = []
+            construct_time_omitted = []
+            special_curve_handles = {}
+            special_scatter_handles = {}
             # sort pHs numerically
             sorted_pHs = sorted(constructs_by_pH_by_date[construct_key].keys(), key=float)
+            vwa_groups = {}
             for pH in sorted_pHs:
                 pH_entry = constructs_by_pH_by_date[construct_key][pH]
+                if is_special_vwa_construct:
+                    for date in pH_entry["dates"]:
+                        vwa_id = pH_entry["dates_vwa_id"].get(date, "").strip()
+                        if vwa_id not in vwa_groups:
+                            vwa_groups[vwa_id] = {'pH_values': [], 'means': [], 'ci_lower': [], 'ci_upper': []}
                 # Always keep raw points for plotting
                 for date, measurements in pH_entry["dates"].items():
                     star_flags = pH_entry["dates_starred"][date]
                     single_omit_flags = pH_entry["dates_single_omitted"][date]
-                    for measurement, is_starred, is_single_omitted in zip(measurements, star_flags, single_omit_flags):
+                    time_omit_flags = pH_entry["dates_time_omitted"][date]
+                    vwa_id = pH_entry["dates_vwa_id"].get(date, "").strip()
+                    for measurement, is_starred, is_single_omitted, is_time_omitted in zip(measurements, star_flags, single_omit_flags, time_omit_flags):
                         construct_pHs.append(float(pH))
                         construct_data.append(measurement)
                         construct_starred.append(is_starred)
                         construct_single_omitted.append(is_single_omitted)
+                        construct_vwa_ids.append(vwa_id)
+                        construct_time_omitted.append(is_time_omitted)
                 # Only use pHs with computed statistics for fitting / CI bands
-                if "mean" not in pH_entry:
+                # Skip only if there are no stats at all for either display or fitting
+                if "mean" not in pH_entry and "mean_display" not in pH_entry:
                     continue
-                pH_values.append(float(pH))
-                means.append(pH_entry["mean"])
-                ci_lower_bounds.append(pH_entry["CI_lower"])
-                ci_upper_bounds.append(pH_entry["CI_upper"])
+                if is_special_vwa_construct:
+                    subgroup_measurements = {}
+                    for date, measurements in pH_entry["dates"].items():
+                        vwa_id = pH_entry["dates_vwa_id"].get(date, "").strip()
+                        if vwa_id not in subgroup_measurements:
+                            subgroup_measurements[vwa_id] = []
+                        star_flags = pH_entry["dates_starred"][date]
+                        single_omit_flags = pH_entry["dates_single_omitted"][date]
+                        time_omit_flags = pH_entry["dates_time_omitted"][date]
+                        paired = list(zip(measurements, star_flags, single_omit_flags, time_omit_flags))
+                        if tailored:
+                            paired = [(d, s, so, to) for d, s, so, to in paired if not s]
+                        if plot_singly:
+                            paired = [(d, s, so, to) for d, s, so, to in paired if not so]
+                        if is_time_comparison:
+                            paired = [(d, s, so, to) for d, s, so, to in paired if not to]
+                        subgroup_measurements[vwa_id].extend([d for d, s, so, to in paired])
+                    for vwa_id, vals in subgroup_measurements.items():
+                        if len(vals) == 0:
+                            continue
+                        vals = np.array(vals, dtype=float)
+                        mean_val = np.mean(vals)
+                        if len(vals) > 1:
+                            sd_val = np.std(vals, ddof=1)
+                            se_val = sd_val / np.sqrt(len(vals))
+                            t_val = t.ppf(1 - (alpha_bonferroni / 2), df=len(vals) - 1)
+                            err = se_val * t_val
+                        else:
+                            err = 0.0
+                        vwa_groups[vwa_id]['pH_values'].append(float(pH))
+                        vwa_groups[vwa_id]['means'].append(mean_val)
+                        vwa_groups[vwa_id]['ci_lower'].append(mean_val - err)
+                        vwa_groups[vwa_id]['ci_upper'].append(mean_val + err)
+                else:
+                    # Add CI-band values whenever display stats exist
+                    if "mean_display" in pH_entry:
+                        pH_values_display.append(float(pH))
+                        ci_lower_bounds.append(pH_entry["CI_lower_display"])
+                        ci_upper_bounds.append(pH_entry["CI_upper_display"])
+
+                    # Add fit values only when fit stats exist
+                    if "mean" in pH_entry:
+                        pH_values_fit.append(float(pH))
+                        means_fit.append(pH_entry["mean"])
 
             try:
-                pH_linspace = np.linspace(min(pH_values),max(pH_values),400)
-                initial_guesses = [max(means),-4,5.5,min(means)]
-                #The returned values from the curve_fit match the order of those passed in as initial guesses, namely: [max,slope,inflection point,min]
-                best_fit_parameters,covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,pH_values,means,p0=initial_guesses)
-                print(best_fit_parameters)
-                inflection_value = best_fit_parameters[2] if best_fit_parameters[2] >= 4.0 else 4.0
-                if "Gravity" in construct:
-                    inflection_points_gravity.append(inflection_value)
-                elif "2Trig" in construct:
-                    if test_name == "A280_48-72hr":
-                        inflection_points_2trig_48hr.append(inflection_value)
-                    else:
-                        inflection_points_2trig_1hr.append(inflection_value)
+                if is_special_vwa_construct:
+                    for vwa_id, group_data in vwa_groups.items():
+                        if len(group_data['pH_values']) < 3:
+                            continue
+                        group_pH = group_data['pH_values']
+                        group_means = group_data['means']
+                        group_ci_lower = group_data['ci_lower']
+                        group_ci_upper = group_data['ci_upper']
+                        pH_linspace = np.linspace(min(group_pH), max(group_pH), 400)
+                        initial_guesses = [max(group_means), -4, 5.5, min(group_means)]
+                        best_fit_parameters, covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,group_pH,group_means,p0=initial_guesses)
+                        inflection_value = best_fit_parameters[2]
+                        if inflection_value <= 4.0:
+                            continue
+                        vwa_colors = get_vwa_behavior_colors(color_map[construct_key])
+                        curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=vwa_colors[vwa_id],linestyle="-" if vwa_id == "W1" else "-")
+                        line_handle = curve_handle_list[0]
+                        ci_handle = plt.fill_between(group_pH,group_ci_lower,group_ci_upper,color=vwa_colors[vwa_id],alpha=0.12)
+                        handles_and_labels[ci_handle] = f"{behavior_label_from_vwa_id(vwa_id)} 95% CI"
+                        legend_groups["group1_ci"].append(ci_handle)
+                        inflection_x = display_inflection_x(inflection_value)
+                        inflection_handle = plt.axvline(inflection_x,color=vwa_colors[vwa_id],linestyle=":")
+                        inflection_handles_and_labels[inflection_handle] = (
+                            f"{behavior_label_from_vwa_id(vwa_id)} Inflection: "
+                            f"{format_inflection_label('', inflection_value).replace(': ', '').strip()}")
+                        legend_groups["group1_inflection"].append(inflection_handle)
+                        special_curve_handles[vwa_id] = line_handle
                 else:
-                    if test_name == "A280_48-72hr":
-                        inflection_points_1trig_48hr.append(inflection_value)
+                    pH_linspace = np.linspace(min(pH_values_fit), max(pH_values_fit), 400)
+                    initial_guesses = [max(means_fit), -4, 5.5, min(means_fit)]
+                    best_fit_parameters, covariance_matrix = curve_fit(pH_to_absorbance_model_4pl, pH_values_fit, means_fit, p0=initial_guesses)
+                    inflection_value = best_fit_parameters[2]
+                    if inflection_value <= 4.0:
+                        raise ValueError(f"Calculated inflection point ({inflection_value:.2f}) is <= 4.0")
+                    if "Gravity" in construct:
+                        inflection_points_gravity.append(inflection_value)
+                    elif "2Trig" in construct:
+                        if test_name == "A280_48-72hr":
+                            inflection_points_2trig_48hr.append(inflection_value)
+                        else:
+                            inflection_points_2trig_1hr.append(inflection_value)
                     else:
-                        inflection_points_1trig_1hr.append(inflection_value)
-
-                ###-------------------------------###
-                #To plot the fitted curve:
-                #don't plot the curve_fit if the inflection point is below 4.0
-                if best_fit_parameters[2] < 4.0:
-                    raise ValueError(f"Calculated inflection point ({round(best_fit_parameters[2],2)}) for {construct} below 4.0")
-                
-                curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace,*best_fit_parameters), color=color_map[construct_key])
-
-                line_handle = curve_handle_list[0]
-
-                ###------plot CI band around the mean values at each pH---------------------###
-                if "Gravity" in construct:
-                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
-                elif test_name == "A280_48-72hr" and "2Trig" not in construct:
-                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
-                elif test_name == "A280_48-72hr" and "2Trig" in construct:
-                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
-                elif "2Trig" in construct:
-                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
-                else:
-                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
+                        if test_name == "A280_48-72hr":
+                            inflection_points_1trig_48hr.append(inflection_value)
+                        else:
+                            inflection_points_1trig_1hr.append(inflection_value)
+                    curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=color_map[construct_key])
+                    line_handle = curve_handle_list[0]
+                    if "Gravity" in construct:
+                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
+                        ci_label = "Gravity 95% CI"
+                    elif test_name == "A280_48-72hr" and "2Trig" not in construct:
+                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
+                        ci_label = "1Trig 48 Hour 95% CI"
+                    elif test_name == "A280_48-72hr" and "2Trig" in construct:
+                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
+                        ci_label = "2Trig 48 Hour 95% CI"
+                    elif "2Trig" in construct:
+                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
+                        ci_label = "2Trig 95% CI"
+                    else:
+                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
+                        ci_label = "1Trig 95% CI"
+                    handles_and_labels[ci_handle] = ci_label
+                    group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
+                    legend_groups[f"{group_prefix}_ci"].append(ci_handle)
 
                 # plot raw scatter points
                 jitter_strength = 0.08
-                jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
-                if "2Trig" in construct and test_name == 'A280_48-72hr':
-                    scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct_key], alpha=0.3)
+                jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength,len(construct_pHs))
+                if is_special_vwa_construct:
+                    special_scatter_handles = {}
+                    vwa_colors = get_vwa_behavior_colors(color_map[construct_key])
+                    for vwa_id, marker_style in [("W1", "^"), ("W2", "s")]:
+                        xs = [x for x, gid in zip(jittered_pHs, construct_vwa_ids) if gid == vwa_id]
+                        ys = [y for y, gid in zip(construct_data, construct_vwa_ids) if gid == vwa_id]
+                        if len(xs) > 0:
+                            scatter_handle = plt.scatter(xs,ys,marker=marker_style,color=vwa_colors[vwa_id],alpha=0.2)
+                            special_scatter_handles[vwa_id] = scatter_handle
+                    for vwa_id in special_curve_handles:
+                        line_handle = special_curve_handles[vwa_id]
+                        scatter_handle = special_scatter_handles.get(vwa_id)
+                        behavior_label = behavior_label_from_vwa_id(vwa_id)
+                        subgroup_n = biological_n_by_construct_and_vwa.get(construct_key, {}).get(vwa_id, 0)
+                        base_label = format_legend_label(construct,test_name,protein_constructs,tests,subgroup_n)
+                        if scatter_handle is not None:
+                            pair_handle = (line_handle, scatter_handle)
+                            handles_and_labels[pair_handle] = f"{base_label}, {behavior_label}"
+                            legend_groups["group1_main"].append(pair_handle)
+                        else:
+                            handles_and_labels[line_handle] = f"{base_label}, {behavior_label}"
+                            legend_groups["group1_main"].append(line_handle)
+                elif "2Trig" in construct and test_name == 'A280_48-72hr':
+                    scatter_handle = plt.scatter(jittered_pHs, construct_data, marker="^",color=color_map[construct_key], alpha=0.3)
                 elif "2Trig" in construct:
-                    scatter_handle = plt.scatter(jittered_pHs,construct_data,marker="^", color=color_map[construct_key], alpha=0.2)
+                    scatter_handle = plt.scatter(jittered_pHs, construct_data, marker="^",color=color_map[construct_key], alpha=0.2)
                 else:
-                    scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct_key], alpha=0.2)
+                    scatter_handle = plt.scatter(jittered_pHs, construct_data, color=color_map[construct_key],alpha=0.2)
                 # Plot asterisks for omitted (starred) data
                 omitted_flags = [
-                    s or (plot_singly and so)
-                    for s, so in zip(construct_starred, construct_single_omitted)]
+                    s or (plot_singly and so) or (is_time_comparison and to)
+                    for s, so, to in zip(construct_starred, construct_single_omitted, construct_time_omitted)]
                 omitted_jittered_pHs = [x for x, omit in zip(jittered_pHs, omitted_flags) if omit]
                 omitted_data = [y for y, omit in zip(construct_data, omitted_flags) if omit]
                 if len(omitted_data) > 0:
@@ -473,14 +655,29 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         plt.annotate("*",(x, y),xytext=(0.005, 0.00005),textcoords="offset points",ha="left",va="bottom",color="black",fontsize=11,fontweight="light",zorder=6)
                     any_starred_points = True
                     combined_any_starred_points = True
-                legend_label = format_legend_label(construct,test_name,protein_constructs,tests,biological_n_by_construct[construct_key])
-                handles_and_labels[(line_handle, scatter_handle)] = legend_label
+                if not is_special_vwa_construct:
+                    legend_label = format_legend_label(construct,test_name,protein_constructs,tests,biological_n_by_construct[construct_key])
+                    pair_handle = (line_handle, scatter_handle)
+                    handles_and_labels[pair_handle] = legend_label
+                    group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
+                    legend_groups[f"{group_prefix}_main"].append(pair_handle)
 
                 ###--------------------------------------------------------------------------###
 
                 if plot_singly:
-                    inflection_handle = plt.axvline(inflection_value,color=color_map[construct_key],linestyle="--")
-                    handles_and_labels[inflection_handle] = f"Inflection point: pH = {inflection_value:.2f}"
+                    inflection_x = display_inflection_x(inflection_value)
+                    if "Gravity" in construct:
+                        inflection_color = "green"
+                    elif test_name == "A280_48-72hr" and "2Trig" in construct:
+                        inflection_color = "indigo"
+                    elif test_name == "A280_48-72hr" and "2Trig" not in construct:
+                        inflection_color = "purple"
+                    elif "2Trig" in construct:
+                        inflection_color = "red"
+                    else:
+                        inflection_color = "blue"
+                    inflection_handle = plt.axvline(inflection_x,color=inflection_color,linestyle="--")
+                    handles_and_labels[inflection_handle] = format_inflection_label("Inflection Point",inflection_value)
 
             except Exception as e:
                 print(f'The curve fit for {construct} failed due to: {e}. Plotting points instead of fitted curve...')
@@ -488,27 +685,30 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 construct_data = []
                 construct_starred = []
                 construct_single_omitted = []
+                construct_time_omitted = []
                 sorted_pHs = sorted(constructs_by_pH_by_date[construct_key].keys(), key=float)
                 for pH in sorted_pHs:
                     pH_entry = constructs_by_pH_by_date[construct_key][pH]
                     for date, measurements in pH_entry["dates"].items():
                         star_flags = pH_entry["dates_starred"][date]
                         single_omit_flags = pH_entry["dates_single_omitted"][date]
-                        for measurement, is_starred, is_single_omitted in zip(measurements, star_flags, single_omit_flags):
+                        time_omit_flags = pH_entry["dates_time_omitted"][date]
+                        for measurement, is_starred, is_single_omitted, is_time_omitted in zip(measurements, star_flags, single_omit_flags,time_omit_flags):
                             construct_pHs.append(float(pH))
                             construct_data.append(measurement)
                             construct_starred.append(is_starred)
                             construct_single_omitted.append(is_single_omitted)
+                            construct_time_omitted.append(is_time_omitted)
                 if "Gravity" in construct:
-                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
+                    ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
                 elif test_name == "A280_48-72hr" and "2Trig" not in construct:
-                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
+                    ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
                 elif test_name == "A280_48-72hr" and "2Trig" in construct:
-                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
+                    ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
                 elif "2Trig" in construct:
-                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
+                    ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
                 else:
-                    plt.fill_between(pH_values, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
+                    ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
                 jitter_strength = 0.08
                 jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
                 if "2Trig" in construct and test_name == 'A280_48-72hr':
@@ -518,8 +718,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 else:
                     scatter_handle = plt.scatter(jittered_pHs,construct_data, color=color_map[construct_key], alpha=0.2)
                 omitted_flags = [
-                    s or (plot_singly and so)
-                    for s, so in zip(construct_starred, construct_single_omitted)]
+                    s or (plot_singly and so) or (is_time_comparison and to)
+                    for s, so, to in zip(construct_starred, construct_single_omitted, construct_time_omitted)]
                 omitted_jittered_pHs = [x for x, omit in zip(jittered_pHs, omitted_flags) if omit]
                 omitted_data = [y for y, omit in zip(construct_data, omitted_flags) if omit]
                 if len(omitted_data) > 0:
@@ -529,6 +729,17 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     combined_any_starred_points = True
                 legend_label = format_legend_label(construct,test_name,protein_constructs,tests,biological_n_by_construct[construct_key])
                 handles_and_labels[scatter_handle] = legend_label
+                handles_and_labels[ci_handle] = f"{legend_label.split(' (n')[0]} 95% CI"
+                group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
+                legend_groups[f"{group_prefix}_ci"].append(ci_handle)
+                legend_groups[f"{group_prefix}_main"].append(scatter_handle)
+                if plot_singly and construct == "2Trig-10xHis-1TEL-SR-DARPin":
+                    if test_name == "A280_48-72hr":
+                        inflection_color = "indigo"
+                    else:
+                        inflection_color = "red"
+                    inflection_handle = plt.axvline(4.50, color=inflection_color, linestyle="--")
+                    handles_and_labels[inflection_handle] = "Inflection Point: pH ≤ 4.50"
 
             # mean points with Bonferroni error bars
             #plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
@@ -536,7 +747,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
 
             if plot_singly:
                 if test_name == "A400":
-                    y_axis = "Absorbance"
+                    y_axis = "Extinction Coefficient (mL mm/mg)"
                     assay = "Turbidity"
                 else:
                     y_axis = "Precipitation Fractional Loss"
@@ -551,8 +762,36 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 if any_starred_points:
                     asterisk_handle = plt.scatter([], [], marker='$*$', color='black', s=40)
                     handles_and_labels[asterisk_handle] = "Omitted from curve fitting"
-                handles = list(handles_and_labels.keys())
+                ordered_handles = []
+                # 1) main data entry first (line+dot pair, or scatter-only fallback)
+                for h in handles_and_labels:
+                    label = handles_and_labels[h]
+                    if "(n =" in label:
+                        ordered_handles.append(h)
+                # 2) inflection line(s) next
+                for h in handles_and_labels:
+                    label = handles_and_labels[h]
+                    if "Inflection" in label:
+                        ordered_handles.append(h)
+                # 3) CI band next
+                for h in handles_and_labels:
+                    label = handles_and_labels[h]
+                    if "95% CI" in label:
+                        ordered_handles.append(h)
+                # 4) omitted-points key last
+                for h in handles_and_labels:
+                    label = handles_and_labels[h]
+                    if "Omitted from curve fitting" in label:
+                        ordered_handles.append(h)
+                # remove duplicates while preserving order
+                seen = set()
+                handles = []
+                for h in ordered_handles:
+                    if h not in seen:
+                        handles.append(h)
+                        seen.add(h)
                 labels = [handles_and_labels[h] for h in handles]
+                apply_custom_y_limits(protein_constructs, tests, plot_singly=True, specific_date=specific_date)
                 plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
                 safe_date_text = date_text.replace("/", "-").replace(", ", "_").replace(" ", "_")
                 plt.savefig(f"{construct.replace('/', '_')}_{test_name}_{safe_date_text}_single.png",dpi=300,bbox_inches="tight")
@@ -566,20 +805,33 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             if is_time_comparison:
                 if "2Trig" in protein_constructs[0]:
                     if len(inflection_points_2trig_1hr) >= 1:
-                        inflection_1hr = plt.axvline(np.mean(inflection_points_2trig_1hr), color="darkorange", linestyle="--")
-                        handles_and_labels[inflection_1hr] = f"1 Hour Inflection: pH = {np.mean(inflection_points_2trig_1hr):.2f}"
+                        mean_1hr = np.mean(inflection_points_2trig_1hr)
+                        inflection_x_1hr = display_inflection_x(mean_1hr)
+                        inflection_1hr = plt.axvline(inflection_x_1hr, color="darkorange", linestyle="--")
+                        inflection_handles_and_labels[inflection_1hr] = format_inflection_label("1 Hour Inflection",mean_1hr)
+                        legend_groups["group1_inflection"].append(inflection_1hr)
+
                     if len(inflection_points_2trig_48hr) >= 1:
-                        inflection_48hr = plt.axvline(np.mean(inflection_points_2trig_48hr), color="indigo", linestyle="--")
-                        handles_and_labels[inflection_48hr] = f"48 Hour Inflection: pH = {np.mean(inflection_points_2trig_48hr):.2f}"
+                        mean_48hr = np.mean(inflection_points_2trig_48hr)
+                        inflection_x_48hr = display_inflection_x(mean_48hr)
+                        inflection_48hr = plt.axvline(inflection_x_48hr, color="indigo", linestyle="--")
+                        inflection_handles_and_labels[inflection_48hr] = format_inflection_label("48 Hour Inflection",mean_48hr)
+                        legend_groups["group2_inflection"].append(inflection_48hr)
                 else:
                     if len(inflection_points_1trig_1hr) >= 1:
-                        inflection_1hr = plt.axvline(np.mean(inflection_points_1trig_1hr), color="blue", linestyle="--")
-                        handles_and_labels[inflection_1hr] = f"1 Hour Inflection: pH = {np.mean(inflection_points_1trig_1hr):.2f}"
+                        mean_1hr = np.mean(inflection_points_1trig_1hr)
+                        inflection_x_1hr = display_inflection_x(mean_1hr)
+                        inflection_1hr = plt.axvline(inflection_x_1hr, color="blue", linestyle="--")
+                        inflection_handles_and_labels[inflection_1hr] = format_inflection_label("1 Hour Inflection",mean_1hr)
+                        legend_groups["group1_inflection"].append(inflection_1hr)
+
                     if len(inflection_points_1trig_48hr) >= 1:
-                        inflection_48hr = plt.axvline(np.mean(inflection_points_1trig_48hr), color="purple", linestyle="--")
-                        handles_and_labels[inflection_48hr] = f"48 Hour Inflection: pH = {np.mean(inflection_points_1trig_48hr):.2f}"
+                        mean_48hr = np.mean(inflection_points_1trig_48hr)
+                        inflection_x_48hr = display_inflection_x(mean_48hr)
+                        inflection_48hr = plt.axvline(inflection_x_48hr, color="purple", linestyle="--")
+                        inflection_handles_and_labels[inflection_48hr] = format_inflection_label("48 Hour Inflection",mean_48hr)
+                        legend_groups["group2_inflection"].append(inflection_48hr)
             elif is_gravity_comparison:
-                # non-gravity line
                 if "A400" in tests:
                     nongravity_points = inflection_points_1trig_1hr
                     nongravity_color = "blue"
@@ -592,36 +844,61 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     nongravity_points = inflection_points_1trig_1hr
                     nongravity_color = "blue"
                     nongravity_label = "ÄKTA 1 Hour Inflection"
+
                 if len(nongravity_points) >= 1:
-                    inflection_ng = plt.axvline(np.mean(nongravity_points), color=nongravity_color, linestyle="--")
-                    handles_and_labels[inflection_ng] = f"{nongravity_label}: pH = {np.mean(nongravity_points):.2f}"
+                    mean_ng = np.mean(nongravity_points)
+                    inflection_x_ng = display_inflection_x(mean_ng)
+                    inflection_ng = plt.axvline(inflection_x_ng, color=nongravity_color, linestyle="--")
+                    inflection_handles_and_labels[inflection_ng] = format_inflection_label(nongravity_label, mean_ng)
+                    legend_groups["group1_inflection"].append(inflection_ng)
 
                 if len(inflection_points_gravity) >= 1:
-                    inflection_g = plt.axvline(np.mean(inflection_points_gravity), color="green", linestyle="--")
+                    mean_g = np.mean(inflection_points_gravity)
+                    inflection_x_g = display_inflection_x(mean_g)
+                    inflection_g = plt.axvline(inflection_x_g, color="green", linestyle="--")
+
                     if "A400" in tests:
-                        handles_and_labels[inflection_g] = f"Gravity Inflection: pH = {np.mean(inflection_points_gravity):.2f}"
+                        inflection_handles_and_labels[inflection_g] = format_inflection_label("Gravity Inflection", mean_g)
                     elif "A280_48-72hr" in tests:
-                        handles_and_labels[inflection_g] = f"Gravity 48 Hour Inflection: pH = {np.mean(inflection_points_gravity):.2f}"
+                        inflection_handles_and_labels[inflection_g] = format_inflection_label("Gravity 48 Hour Inflection",mean_g)
                     elif "A280_1hr" in tests:
-                        handles_and_labels[inflection_g] = f"Gravity 1 Hour Inflection: pH = {np.mean(inflection_points_gravity):.2f}"
+                        inflection_handles_and_labels[inflection_g] = format_inflection_label("Gravity 1 Hour Inflection",mean_g)
+                    legend_groups["group2_inflection"].append(inflection_g)
             else:
                 # standard 1Trig vs 2Trig comparison
-                if len(inflection_points_1trig_1hr) >= 1:
-                    if "A280_48-72hr" in tests:
-                        color_1trig = "purple"
-                    else:
-                        color_1trig = "blue"
-                    inflection_1 = plt.axvline(np.mean(inflection_points_1trig_1hr), color=color_1trig, linestyle="--")
-                    handles_and_labels[inflection_1] = f"1Trig Inflection: pH = {np.mean(inflection_points_1trig_1hr):.2f}"
-                if len(inflection_points_2trig_1hr) >= 1:
-                    if "A280_48-72hr" in tests:
-                        color_2trig = "indigo"
-                    else:
-                        color_2trig = "red"
-                    inflection_2 = plt.axvline(np.mean(inflection_points_2trig_1hr), color=color_2trig, linestyle="--")
-                    handles_and_labels[inflection_2] = f"2Trig Inflection: pH = {np.mean(inflection_points_2trig_1hr):.2f}" 
+                if "A280_48-72hr" in tests:
+                    inflection_points_1trig = inflection_points_1trig_48hr
+                    inflection_points_2trig = inflection_points_2trig_48hr
+                    color_1trig = "purple"
+                    color_2trig = "indigo"
+                else:
+                    inflection_points_1trig = inflection_points_1trig_1hr
+                    inflection_points_2trig = inflection_points_2trig_1hr
+                    color_1trig = "blue"
+                    color_2trig = "red"
+                if len(inflection_points_1trig) >= 1:
+                    mean_1trig = np.mean(inflection_points_1trig)
+                    inflection_x_1 = display_inflection_x(mean_1trig)
+                    inflection_1 = plt.axvline(inflection_x_1, color=color_1trig, linestyle="--")
+                    inflection_handles_and_labels[inflection_1] = format_inflection_label("1Trig Inflection",mean_1trig)
+                    legend_groups["group1_inflection"].append(inflection_1)
+                if len(inflection_points_2trig) >= 1:
+                    mean_2trig = np.mean(inflection_points_2trig)
+                    inflection_x_2 = display_inflection_x(mean_2trig)
+                    inflection_2 = plt.axvline(inflection_x_2, color=color_2trig, linestyle="--")
+                    inflection_handles_and_labels[inflection_2] = format_inflection_label("2Trig Inflection",mean_2trig)
+                    legend_groups["group2_inflection"].append(inflection_2)
+                else:
+                    is_darpin_comparison = (
+                            len(protein_constructs) == 2
+                            and any(c == "10xHis-1TEL-SR-DARPin" for c in protein_constructs)
+                            and any(c == "2Trig-10xHis-1TEL-SR-DARPin" for c in protein_constructs))
+                    if is_darpin_comparison:
+                        inflection_2 = plt.axvline(4.50, color=color_2trig, linestyle="--")
+                        inflection_handles_and_labels[inflection_2] = "2Trig Inflection: pH ≤ 4.50"
+                        legend_groups["group2_inflection"].append(inflection_2)
             if "A400" == tests[0]:
-                y_axis = 'Absorbance'
+                y_axis = 'Extinction Coefficient (mL mm/mg)'
                 assay = 'Turbidity'
             else:
                 y_axis = "Precipitation Fractional Loss"
@@ -647,69 +924,71 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             if combined_any_starred_points:
                     asterisk_handle = plt.scatter([], [], marker='$*$', color='black', s=40)
                     handles_and_labels[asterisk_handle] = "Omitted from curve fitting"
-            handles = [handle for handle in handles_and_labels]
-            labels = [label for handle in handles_and_labels for label in [handles_and_labels[handle]]]
-            is_pa = any("PA-TNK1.UBA" in construct for construct in protein_constructs)
-            is_vwa = any("vWA" in construct for construct in protein_constructs)
-            is_1hr_only = ("A280_1hr" in tests and "A280_48-72hr" not in tests)
-            is_1hr_vs_48hr = ("A280_1hr" in tests and "A280_48-72hr" in tests)
-            is_pa_1trig_vs_2trig_1hr = is_pa and len(protein_constructs) == 2 and is_1hr_only
-            is_vwa_1trig_vs_2trig_1hr = is_vwa and len(protein_constructs) == 2 and is_1hr_only
-            is_pa_1trig_1hr_vs_48hr = is_pa and len(protein_constructs) == 1 and "2Trig" not in protein_constructs[0] and is_1hr_vs_48hr
-            is_vwa_1trig_1hr_vs_48hr = (is_vwa and len(protein_constructs) == 1 and "2Trig" not in protein_constructs[0] and is_1hr_vs_48hr)
-            is_vwa_2trig_1hr_vs_48hr = (is_vwa and len(protein_constructs) == 1 and "2Trig" in protein_constructs[0] and is_1hr_vs_48hr)
-            is_vwa_1hr_non_gravity_vs_gravity = (is_vwa and len(protein_constructs) == 2 and is_1hr_only and any("Gravity" in construct for construct in protein_constructs))
-            
-            if (is_pa_1trig_vs_2trig_1hr or is_vwa_1trig_vs_2trig_1hr or is_pa_1trig_1hr_vs_48hr or is_vwa_1trig_1hr_vs_48hr or is_vwa_2trig_1hr_vs_48hr or is_vwa_1hr_non_gravity_vs_gravity):
-                plt.legend(handles, labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="lower right")
-            else:
-                plt.legend(handles, labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
+            handles_and_labels.update(inflection_handles_and_labels)
+            ordered_handles = (legend_groups["group1_main"] + legend_groups["group1_inflection"] + legend_groups["group1_ci"] + legend_groups["group2_main"] + legend_groups["group2_inflection"] + legend_groups["group2_ci"] + legend_groups["other"])
+            # remove duplicates while preserving order
+            seen = set()
+            handles = []
+            for h in ordered_handles:
+                if h not in seen and h in handles_and_labels:
+                    handles.append(h)
+                    seen.add(h)
+            labels = [handles_and_labels[h] for h in handles]
+            apply_custom_y_limits(protein_constructs, tests, plot_singly=False, specific_date=specific_date)
+            plt.legend(handles, labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
             safe_constructs = "_vs_".join([p.replace("/", "_") for p in protein_constructs])
             safe_tests = "_vs_".join(tests)
             plt.savefig(f"{safe_constructs}__{safe_tests}.png", dpi=300, bbox_inches="tight")
             plt.show()
             plt.close()
 
+if __name__ == '__main__':
+    for protein_construct in protein_dict:
+        if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+            # Single-trigger A400: one plot per replicate date
+            for date in get_dates_for_construct(f'{protein_construct}', 'A400'):
+                statisticize([(f'{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
+            # Double-trigger A400: one plot per replicate date
+            for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A400'):
+                statisticize([(f'2Trig-{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
+            for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A400'):
+                statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A400')],plot=True, plot_singly=True, specific_date=date)
+            # Single vs. Double-trigger A400
+            statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        # Single-trigger A400: one plot per replicate date
-        for date in get_dates_for_construct(f'{protein_construct}', 'A400'):
-            statisticize([(f'{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
-        # Double-trigger A400: one plot per replicate date
-        for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A400'):
-            statisticize([(f'2Trig-{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
-        # Single vs. Double-trigger A400
-        statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
+    for protein_construct in protein_dict:
+        if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+            # Single-trigger A280 1 hr: one plot per replicate date
+            for date in get_dates_for_construct(f'{protein_construct}', 'A280_1hr'):
+                statisticize([(f'{protein_construct}', 'A280_1hr')],plot=True,plot_singly=True,specific_date=date)
+            # Double-trigger A280 1 hr: one plot per replicate date
+            for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A280_1hr'):
+                statisticize([(f'2Trig-{protein_construct}', 'A280_1hr')],plot=True,plot_singly=True,specific_date=date)
+            # Single vs. Double-trigger A280-1hr
+            statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        # Single-trigger A280 1 hr: one plot per replicate date
-        for date in get_dates_for_construct(f'{protein_construct}', 'A280_1hr'):
-            statisticize([(f'{protein_construct}', 'A280_1hr')],plot=True,plot_singly=True,specific_date=date)
-        # Double-trigger A280 1 hr: one plot per replicate date
-        for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A280_1hr'):
-            statisticize([(f'2Trig-{protein_construct}', 'A280_1hr')],plot=True,plot_singly=True,specific_date=date)
-        # Single vs. Double-trigger A280-1hr
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
+    for protein_construct in protein_dict:
+        if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+            # Single-trigger A280 48-72 hr: one plot per replicate date
+            for date in get_dates_for_construct(f'{protein_construct}', 'A280_48-72hr'):
+               statisticize([(f'{protein_construct}', 'A280_48-72hr')],plot=True,plot_singly=True,specific_date=date)
+            # Double-trigger A280 48-72 hr: one plot per replicate date
+            for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A280_48-72hr'):
+                statisticize([(f'2Trig-{protein_construct}', 'A280_48-72hr')],plot=True,plot_singly=True,specific_date=date)
+            # Single-trigger A280 1hr vs 48-72 hr
+            statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True,tailored=True)
+        elif '2Trig' in protein_construct:
+            # Double-trigger A280 1hr vs 48-72 hr
+            statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True,tailored=True)
 
-for protein_construct in protein_dict:
-    if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-        # Single-trigger A280 48-72 hr: one plot per replicate date
-        for date in get_dates_for_construct(f'{protein_construct}', 'A280_48-72hr'):
-            statisticize([(f'{protein_construct}', 'A280_48-72hr')],plot=True,plot_singly=True,specific_date=date)
-        # Double-trigger A280 48-72 hr: one plot per replicate date
-        for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A280_48-72hr'):
-            statisticize([(f'2Trig-{protein_construct}', 'A280_48-72hr')],plot=True,plot_singly=True,specific_date=date)
-        # Single vs. Double-trigger A280_48-72hr
-        #statisticize([(f'{protein_construct}','A280_48-72hr'),(f'2Trig-{protein_construct}','A280_48-72hr')],plot=True)
-        # Single-trigger A280 1hr vs 48-72 hr
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True,tailored=True)
-    elif '2Trig' in protein_construct:
-        # Double-trigger A280 1hr vs 48-72 hr
-        statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True,tailored=True)
-
-#Single trigger TV-vWA A400, A280 1 HR, A280 48-72 HR
-statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
-statisticize([('10xHis-1TEL-TV-vWA','A280_1hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_1hr')],plot=True)
-statisticize([('10xHis-1TEL-TV-vWA','A280_48-72hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_48-72hr')],plot=True)
+    # Plot the individual Gravity replicates for A400, A280 1 HR, and A280 48-72 HR
+    for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A400'):
+        statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A400')], plot=True, plot_singly=True, specific_date=date)
+    for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A280_1hr'):
+        statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A280_1hr')], plot=True, plot_singly=True, specific_date=date)
+    for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A280_48-72hr'):
+        statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A280_48-72hr')], plot=True, plot_singly=True, specific_date=date)
+    # Single trigger TV-vWA A400, A280 1 HR, A280 48-72 HR
+    statisticize([('10xHis-1TEL-TV-vWA','A280_48-72hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_48-72hr')],plot=True)
+    statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
+    statisticize([('10xHis-1TEL-TV-vWA','A280_1hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_1hr')],plot=True)
