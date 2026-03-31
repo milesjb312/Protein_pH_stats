@@ -1,3 +1,6 @@
+# Discloser: The authors of this code used ChatGPT services to develop and edit most of the code. The authors reviewed every line of AI-produced code before implementation
+# to ensure that it performed the desired functions without innapropriately changing or removing data.
+
 import csv
 from scipy.optimize import curve_fit
 from scipy.stats import t
@@ -161,6 +164,8 @@ def get_dates_for_construct(protein_construct, test):
             dates.add(date)
     return sorted(dates)
 
+# This helper function determines the legend label for 1Trig-10xHis-1TEL-TV-vWA constructs. We do this because we obeserve two distinct behaviors for the 1 Hour and
+# 48 Hour solubility assays for 1Trig vWA and want to highlight that difference.
 def behavior_label_from_vwa_id(vwa_id):
     if vwa_id == "W1":
         return "Behavior 1"
@@ -168,10 +173,15 @@ def behavior_label_from_vwa_id(vwa_id):
         return "Behavior 2"
     return vwa_id
 
+# This helper function assigns two unique colors to the data points and 4PL curve for the vWA plots that show the different vWA behaviors. It uses the base color assigned
+# to behavior 1 as a reference for determining behavior 2's color.
 def get_vwa_behavior_colors(base_color):
     return {"W1": base_color,"W2": tuple(max(0, c * 0.65) for c in base_color[:3]) + (base_color[3],) if len(base_color) == 4
               else tuple(max(0, c * 0.65) for c in base_color[:3])}
 
+# This helper function defines the y axis boundaries that the plot can show. We determined each boundary by looking at the plot and deciding how far zoomed in we needed to
+# be in order to see the plot more clearly. This does visually exclude some points from the plot, but it doesn't affect how we calculate the 95% confidence interval or the
+# 4PL curve (for plots that do have a 4PL curve).
 def apply_custom_y_limits(protein_constructs, tests, plot_singly, specific_date=None):
     key = (tuple(sorted(protein_constructs)), tuple(sorted(tests)))
     single_plot_limits = {}
@@ -190,13 +200,6 @@ def apply_custom_y_limits(protein_constructs, tests, plot_singly, specific_date=
         plt.ylim(bottom=limits.get("ymin"), top=limits.get("ymax"))
 
 def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=False,pool=False, specific_date=None,specific_stock_id=None):
-    """
-    Normally, you should pass only one test and one protein construct into 'proteins_and_tests', in the form of a list of tuples, where the
-    tuple looks like: (protein_construct,test)
-    'protein_constructs' are the protein_dict dictionary keys that refer to the particular protein constructs of interest.
-    'tests' are the types of tests you performed, referred to by the variable being measured, or the column name in the csv. Ie.: 'A400', 'A280_1hr'
-    """
-    #The first half of this function is just a filter pulling applicable data from the protein_dict dictionary.
     data = {'protein construct':[],'date':[],'pH':[],'test':[],'data':[],'tailored_data':[], 'is_starred':[], 'is_single_omitted':[], 'is_time_omitted':[], 'vwa_id':[]}
     protein_constructs = []
     tests = []
@@ -205,7 +208,6 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             protein_constructs.append(protein_construct)
         if test not in tests:
             tests.append(test)
-    # Detect 1 hr vs 48 hr comparison
     is_time_comparison = (len(protein_constructs) == 1 and "A280_1hr" in tests and "A280_48-72hr" in tests)
     for protein_construct,test in proteins_and_tests:
         for bio_rep in protein_dict[protein_construct]:
@@ -230,20 +232,12 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     data['test'].append(test)
                     vwa_id = protein_dict[protein_construct][bio_rep].get('vWA ID', '').strip()
                     data['vwa_id'].append(vwa_id)
-
                     concentration = float(bio_rep.split("_")[1])
-                    #We dilute our protein by putting 200 uL into 800 uL.
                     theoretical_max_concentration = concentration/5
-                    #Divide by the theoretical_max_concentration to normalize between replicates with different stock protein concentrations.
-                    #This means that for precipitation assays, we are reporting the percent of remaining soluble protein,
-                    #and for turbidity assays, we are reporting A400 absorbance per mg/mL of protein.
-                    #Beer's law says that:
-                    #Absorbance=extinction_coefficient*column_length*concentration.
-                    #This means it should be appropriate for us to divide absorbance by concentration. If we do so, we are effectively reporting on the
-                    #extinction coefficient of the precipitated protein. Another word for this is the molar absorptivity. We propose that the higher a
-                    #molar absorptivity is, the denser the precipitate is. Essentially, the solubility and turbidity assays are testing entirely
-                    #different things.
 
+                    # The "if isinstance" and it's associated "else" statement determines whether this data point needs to be omitted from the curve fitting. If it doesn't,
+                    # then return False statements for certain labels. If it does need to be omitted, we return True statements that stick with the data point throughout
+                    # the rest of the function. It also removes the symbol (*, ^, ~) used to signal that that data point needs to be omitted from curve fitting.
                     if isinstance(replicate, float):
                         numeric_replicate = replicate
                         is_starred = False
@@ -255,9 +249,11 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         is_single_omitted = "^" in replicate_str
                         is_time_omitted = "~" in replicate_str
                         numeric_replicate = float(replicate_str.replace("*", "").replace("^", "").replace("~", ""))
+
+                    # Normalized Precipitation Loss (solubility plots)
                     if test in ['A280_1hr', 'A280_48-72hr']:
                         value = (theoretical_max_concentration - numeric_replicate) / theoretical_max_concentration
-                    # Normalized Absorbance: Abs @ 400 nm * (Expected Concentration/Actual Concentration)
+                    # Normalized Absorbance (turbidity plots)
                     else:
                         value = numeric_replicate * (5/concentration)
                     data['data'].append(value)
@@ -272,12 +268,10 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
     for pH in data['pH']:
         if pH not in pHs:
             pHs.append(pH)
-
     if tailored == True:
         data_quality = 'tailored_data'
     else:
         data_quality = 'data'
-
     constructs_by_pH_by_date = {}
     for replicate in range(len(data['protein construct'])):
         construct = data['protein construct'][replicate]
@@ -323,12 +317,11 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 if vwa_id not in biological_n_by_construct_and_vwa[construct]:
                     biological_n_by_construct_and_vwa[construct][vwa_id] = set()
                 biological_n_by_construct_and_vwa[construct][vwa_id].add(date)
-    # convert sets to counts
     for construct in biological_n_by_construct_and_vwa:
         for vwa_id in biological_n_by_construct_and_vwa[construct]:
             biological_n_by_construct_and_vwa[construct][vwa_id] = len(biological_n_by_construct_and_vwa[construct][vwa_id])
 
-    # Compute the 95% CI Band for each pH value within each construct
+    # Compute the 95% CI Band for each pH value within each construct (we use the bonferroni technique).
     alpha_bonferroni = 0.05/11
     for construct in constructs_by_pH_by_date:
         for pH in constructs_by_pH_by_date[construct]:
@@ -337,87 +330,84 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             pH_single_omitted = constructs_by_pH_by_date[construct][pH]["dates_single_omitted"]
             pH_time_omitted = constructs_by_pH_by_date[construct][pH]["dates_time_omitted"]
 
+            # These lists are populated with data that needs to be displayed on the plot and/or used for curve fitting (all points are displayed on the plot).
             all_drops_for_display = []
             all_drops_for_fit = []
 
+            # This for loop goes through each pH for one construct and "attaches" the labels we use to determine if a measurement should be omitted from curve fitting
+            # and if it should have an asterisk next to it in the plot signifying that it was omitted from curve fitting.
             for date_key in pH_dates:
                 drops = pH_dates[date_key]
                 star_flags = pH_starred[date_key]
                 single_omit_flags = pH_single_omitted[date_key]
                 time_omit_flags = pH_time_omitted[date_key]
-
                 paired = list(zip(drops, star_flags, single_omit_flags, time_omit_flags))
-
-                # Data shown in CI band:
-                # include starred points, but still honor single-plot-only omissions
                 display_paired = paired
-
-                # Data used for fitting:
                 fit_paired = paired
+
+                # d = drop, s = star flag (omitted from combined plots), so = just omit from single plot, to = just omit if doing a 1 Hour vs 48 Hour plot.
+                # Remove starred points (if tailored) (csv symbol: *)
                 if tailored:
                     fit_paired = [(d, s, so, to) for d, s, so, to in fit_paired if not s]
+                # Remove sinlge-plot omissions (csv symbol: ^)
                 if plot_singly:
                     fit_paired = [(d, s, so, to) for d, s, so, to in fit_paired if not so]
+                # Remove 1 Hour vs 48 Hour omissions (csv symbol: ~)
                 if is_time_comparison:
                     fit_paired = [(d, s, so, to) for d, s, so, to in fit_paired if not to]
-
                 display_drops = [d for d, s, so, to in display_paired]
                 fit_drops = [d for d, s, so, to in fit_paired]
-
                 if len(display_drops) > 0:
+                    # Pool drops from all replicates into a list that will be used for plotting (unless you're plotting a single replicate).
                     all_drops_for_display.extend(np.array(display_drops, dtype=float))
                 if len(fit_drops) > 0:
+                    # Pool drops from all replicates into a list that will be used for curve fitting (unless you're plotting a single replicate).
                     all_drops_for_fit.extend(np.array(fit_drops, dtype=float))
 
-            # display stats for CI
+            # Creat variables that will be displayed on the plot and used for calculating the 95% confidence interval.
             if len(all_drops_for_display) > 0:
+                # Sample Size
                 N_display = len(all_drops_for_display)
+                # Standard Deviation
                 sd_display = np.std(all_drops_for_display)
+                # Standard Error
                 SE_display = sd_display / np.sqrt(N_display)
+                # t Statistic using Student's t distribution
                 t_display = t.ppf(1 - (alpha_bonferroni / 2), df=N_display - 1)
                 error_display = SE_display * t_display
                 mean_display = np.mean(all_drops_for_display)
 
                 constructs_by_pH_by_date[construct][pH]["mean_display"] = mean_display
+                # Lower 95% confidence interval boundary
                 constructs_by_pH_by_date[construct][pH]["CI_lower_display"] = mean_display - error_display
+                # Upper 95% confidence interval boundary
                 constructs_by_pH_by_date[construct][pH]["CI_upper_display"] = mean_display + error_display
 
-            # fit stats for curve fitting
+            # Calculate the mean of the data we use to do the curve fitting.
             if len(all_drops_for_fit) > 0:
-                N_fit = len(all_drops_for_fit)
-                sd_fit = np.std(all_drops_for_fit)
-                SE_fit = sd_fit / np.sqrt(N_fit)
-                t_fit = t.ppf(1 - (alpha_bonferroni / 2), df=N_fit - 1)
-                error_fit = SE_fit * t_fit
                 mean_fit = np.mean(all_drops_for_fit)
-
                 constructs_by_pH_by_date[construct][pH]["mean"] = mean_fit
-                constructs_by_pH_by_date[construct][pH]["CI_lower"] = mean_fit - error_fit
-                constructs_by_pH_by_date[construct][pH]["CI_upper"] = mean_fit + error_fit
-                constructs_by_pH_by_date[construct][pH]["N"] = N_fit
-
+    
+    # This function returns the 4PL equation that we use to plot the 4PL curve onto the plot. We get the parameters from the "curve_fit" command below.
     def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
-        #This is the model (4 Parameter Logistic, 4PL) that we're going to try to fit using scipy's curve_fit function.
         return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
 
+    # This helper function categorizes datasets in combined plots. Since all combined plots are comparing one group to another (1Trig vs 2Trig, 1 Hour vs 48 Hour, Gravity vs ÄKTA).
+    # Group 1 will be placed higher than group 2 in the legend.
     def classify_legend_group(construct, test_name, protein_constructs, tests):
         is_gravity_comparison = (len(protein_constructs) == 2 and len(tests) == 1 and any("Gravity" in c for c in protein_constructs))
         is_time_comparison = (len(protein_constructs) == 1 and "A280_1hr" in tests and "A280_48-72hr" in tests)
-
         if is_gravity_comparison:
             if "Gravity" in construct:
                 return "group2"
-            return "group1"  # ÄKTA first
-
+            return "group1"  # ÄKTA first in legend
         if is_time_comparison:
             if test_name == "A280_48-72hr":
                 return "group2"
-            return "group1"  # 1 Hour first
-
-        # default: 1Trig vs 2Trig
+            return "group1"  # 1 Hour first in legend
         if "2Trig" in construct:
             return "group2"
-        return "group1"
+        return "group1" # 1 Trig first in legend
 
     if plot==True:
         plt.figure(figsize=(8.75,6))
@@ -448,16 +438,21 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     keys_2trig.append(construct_key)
                 else:
                     keys_1trig.append(construct_key)
+
             def shade_list(cmap, n, lo=0.25, hi=0.9):
                 if n<= 1:
                     return [cmap((lo + hi) / 2)]
                 return [cmap(x) for x in np.linspace(lo, hi, n)]
+
+            # Lists of color shades for the 95% confidence intervals.
             blue_shades = shade_list(plt.cm.Blues, len(keys_1trig))
             orange_shades = shade_list(plt.cm.Oranges, len(keys_2trig))
             crimson_shades = shade_list(plt.cm.PuRd, len(keys_48_hour))
             purple_shades = shade_list(plt.cm.Purples, len(keys_2Trig_48_hour))
             lime_shades = shade_list(plt.cm.YlGn, len(keys_Gravity))
             brown_shades = shade_list(plt.cm.copper, len(keys_Gravity_48_hour))
+
+            # Determines colors for the scatter plots.
             color_map = {}
             for construct, color in zip(sorted(keys_1trig), blue_shades):
                 color_map[construct] = color
@@ -498,7 +493,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             construct_time_omitted = []
             special_curve_handles = {}
             special_scatter_handles = {}
-            # sort pHs numerically
+            # Sort pHs numerically.
             sorted_pHs = sorted(constructs_by_pH_by_date[construct_key].keys(), key=float)
             vwa_groups = {}
             for pH in sorted_pHs:
@@ -507,8 +502,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     for date in pH_entry["dates"]:
                         vwa_id = pH_entry["dates_vwa_id"].get(date, "").strip()
                         if vwa_id not in vwa_groups:
-                            vwa_groups[vwa_id] = {'pH_values': [], 'means': [], 'ci_lower': [], 'ci_upper': []}
-                # Always keep raw points for plotting
+                            vwa_groups[vwa_id] = {'pH_values': [], 'means': []}
+                # Always keep raw data points for plotting.
                 for date, measurements in pH_entry["dates"].items():
                     star_flags = pH_entry["dates_starred"][date]
                     single_omit_flags = pH_entry["dates_single_omitted"][date]
@@ -521,10 +516,11 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         construct_single_omitted.append(is_single_omitted)
                         construct_vwa_ids.append(vwa_id)
                         construct_time_omitted.append(is_time_omitted)
-                # Only use pHs with computed statistics for fitting / CI bands
-                # Skip only if there are no stats at all for either display or fitting
+                # If we weren't able to compute statistics for data at a certain pH then we don't plot the confidence interval bands or any of the scatter points.
                 if "mean" not in pH_entry and "mean_display" not in pH_entry:
                     continue
+                # The following if and else statements compute statistics for vWA datasets with unique behaviors and add those data to empty lists. We also add any other data
+                # to other lists.
                 if is_special_vwa_construct:
                     subgroup_measurements = {}
                     for date, measurements in pH_entry["dates"].items():
@@ -570,6 +566,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         pH_values_fit.append(float(pH))
                         means_fit.append(pH_entry["mean"])
 
+        #--------------------The rest of the code at this point until "if __name__ == '__main__':" deals with curve fitting and plotting---------------------#
+
             try:
                 if is_special_vwa_construct:
                     for vwa_id, group_data in vwa_groups.items():
@@ -581,8 +579,9 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         group_ci_upper = group_data['ci_upper']
                         pH_linspace = np.linspace(min(group_pH), max(group_pH), 400)
                         initial_guesses = [max(group_means), -4, 5.5, min(group_means)]
+                        # This is where we fit a curve to the data using scipy's curve_fit function. Scipy uses non-linear least squares to fit a function, f, to data. 
                         best_fit_parameters, covariance_matrix = curve_fit(pH_to_absorbance_model_4pl,group_pH,group_means,p0=initial_guesses)
-                        inflection_value = best_fit_parameters[2]
+                        inflection_value = round(best_fit_parameters[2],1)
                         if inflection_value <= 4.0:
                             continue
                         vwa_colors = get_vwa_behavior_colors(color_map[construct_key])
@@ -602,7 +601,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     pH_linspace = np.linspace(min(pH_values_fit), max(pH_values_fit), 400)
                     initial_guesses = [max(means_fit), -4, 5.5, min(means_fit)]
                     best_fit_parameters, covariance_matrix = curve_fit(pH_to_absorbance_model_4pl, pH_values_fit, means_fit, p0=initial_guesses)
-                    inflection_value = best_fit_parameters[2]
+                    inflection_value = round(best_fit_parameters[2],1)
                     if inflection_value <= 4.0:
                         raise ValueError(f"Calculated inflection point ({inflection_value:.1f}) is <= 4.0")
                     if "Gravity" in construct:
@@ -696,8 +695,6 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
                     legend_groups[f"{group_prefix}_main"].append(pair_handle)
 
-                ###--------------------------------------------------------------------------###
-
                 if plot_singly:
                     inflection_x = display_inflection_x(inflection_value)
                     if "Gravity" in construct and test_name == "A280_48-72hr":
@@ -779,10 +776,6 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 if (plot_singly and construct == "10xHis-1TEL-TV-vWA" and test_name == "A400" and specific_date == "1/28/2026"):
                     inflection_handle = plt.axvline(4.5, color="blue", linestyle="--")
                     handles_and_labels[inflection_handle] = "Inflection Point: pH ≤ 4.5"
-
-            # mean points with Bonferroni error bars
-            #plt.errorbar(x=pH_values,y=means, yerr=[np.array(means) - np.array(ci_lower_bounds), np.array(ci_upper_bounds) - np.array(means)], fmt='none', ecolor=color_map[construct], capsize=4, alpha=0.9)
-            ###--------------------------------------------------------------------------###
 
             if plot_singly:
                 if test_name == "A400":
