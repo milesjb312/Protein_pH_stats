@@ -6,18 +6,19 @@ from matplotlib.legend_handler import HandlerTuple
 import numpy as np
 from pathlib import Path
 
-#1)Pull specified constructs and their corresponding specified data from csv and put into protein_dict by calling the master function 'statisticize'. Ex.:
-    #statisticize([('Construct1','A400'),('Construct2','A400')])
-#2)Repeat steps 3-4 for each construct asked for.
-#3)For the purposes of data analysis, only combine biological replicates right before making plots.
-#4)Determine medians, try to fit a curve, and plot.
-
-#First, place all the data within a dictionary, separating by protein construct, then by date/concentration/pH, then by test-type.
 protein_dict = {}
 
 BASE_DIR = Path(__file__).resolve().parent
 CSV_PATH = BASE_DIR / "data.csv"
 
+"""
+Populate our protein_dict dictionary with the specified constructs and their corresponding specified data from the csv by calling the master function 'statisticize'.
+For example, we may use the command statisticize([('Construct1','A400'),('Construct2','A400')]) to populate protein_dict with turbidity data corresponding to both
+single- and double-trigger constructs. Each protein construct within protein_dict will include information about each biological replicate's data, stock protein concentration
+used to perform the assay, the assay type, the pH the measurement was taken at, the raw measurement, the stock ID (if applicable), and the vWA ID (if applicable). We do 
+include measurements omitted from curve fitting (marked in the csv file with a *, ^, or ~) within protein_dict. To clarify, this code uses a variety of labels for single- and
+double-trigger constructs, but annotations will refer to single- and double-trigger as 1Trig and 2Trig, respectively. 
+"""
 with open(CSV_PATH, newline="", encoding="utf-8-sig") as csvfile:
     reader = csv.DictReader(csvfile)
     for row in reader:
@@ -46,6 +47,12 @@ with open(CSV_PATH, newline="", encoding="utf-8-sig") as csvfile:
             else:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(raw_value))
 
+"""
+The next two helper functions format the title and legend for each plot using the information in protein_dict. Each plot is titled with the base protein and the legend specifies which
+points are 1Trig or 2Trig, if they are from a 1 hour or 48 hour solubility assay, and if the stock protein concentration was made using an ÄKTA or gravity nickel affinity
+purification coloumn. For example, for the turbidity graph comparing the 1Trig and 2Trig variants of 1TEL-GG-TNK1.UBA, the title will say "1TEL-GG-TNK1.UBA" and the 
+legend will specifiy which dots, inflection point line, 95% confidence intervals, and four parameter curves correlate to 1Trig and 2Trig.
+"""
 def format_protein_title(construct_name: str) -> str:
     name = construct_name.strip()
     # Remove prefixes that should not appear in the title
@@ -80,15 +87,16 @@ def format_protein_title(construct_name: str) -> str:
     return f"{tag}{scaffold}-{linker}-{target_protein}"
 
 def format_legend_label(construct, test_name, protein_constructs, tests, n):
+    # Booleans that are used to determine the specific labels each plot needs in the legend.
     is_2trig = "2Trig" in construct
     is_gravity = "Gravity" in construct
-    is_vwa = any(("vWA" in c) and ("2Trig" not in c) for c in protein_constructs)
+    is_vwa_1trig = any(("vWA" in c) and ("2Trig" not in c) for c in protein_constructs)
     has_1hr = "A280_1hr" in tests
     has_48hr = "A280_48-72hr" in tests
     is_solubility = test_name in ["A280_1hr", "A280_48-72hr"]
-    # Case 1: 1Trig vs 2Trig
+    # Case 1: Is this plot copmaring ÄKTA vs Gravity, 1Trig vs 2Trig, and/or 1 Hour vs 48 Hour Solubility?
     if len(protein_constructs) == 2 and len(tests) == 1:
-        if is_vwa and any("Gravity" in c for c in protein_constructs):
+        if is_vwa_1trig and any("Gravity" in c for c in protein_constructs):
             base_label = "Gravity" if is_gravity else "ÄKTA"
         else:
             base_label = "2Trig" if is_2trig else "1Trig"
@@ -98,7 +106,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
             label = f"{base_label} 48 Hour"
         else:
             label = base_label
-    # Case 2: 1 hr vs 48 hr for same construct
+    # Case 2: Is this plot a 1 Hour vs 48 Hour comparison for one protein construct?
     elif len(protein_constructs) == 1 and has_1hr and has_48hr:
         if is_gravity:
             trig_label = "Gravity"
@@ -106,7 +114,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
             trig_label = "2Trig" if is_2trig else "1Trig"
         time_label = "1 Hour" if test_name == "A280_1hr" else "48 Hour"
         label = f"{trig_label} {time_label}"
-    # Case 3: single plot, one construct and one test
+    # Case 3: Is this plot showing data from one replicate for one protein construct?
     elif len(protein_constructs) == 1 and len(tests) == 1:
         if is_gravity:
             base_label = "Gravity"
@@ -119,8 +127,10 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
             label = base_label
     else:
         label = construct
+    # Include the number of replicates represented by "n".
     return f"{label} (n = {n})"
 
+# This helper function determines whether the inflection value needs to be set at 4.5 or 8.5.
 def display_inflection_x(inflection_value):
     if inflection_value <= 4.0:
         return 4.5
@@ -129,6 +139,7 @@ def display_inflection_x(inflection_value):
     else:
         return inflection_value
 
+# This helper function creates the legend label for the inflection point line. 
 def format_inflection_label(prefix, inflection_value):
     if inflection_value <= 4.0:
         return f"{prefix}: pH ≤ 4.5"
@@ -137,6 +148,8 @@ def format_inflection_label(prefix, inflection_value):
     else:
         return f"{prefix}: pH = {inflection_value:.1f}"
 
+# This helper function returns a list of dates for each biological replicate for one protein construct at a time. For example, one returned list may look like
+# ["1/15/2026", "1/28/2026", 2/02/2026].
 def get_dates_for_construct(protein_construct, test):
     if protein_construct not in protein_dict:
         return []
