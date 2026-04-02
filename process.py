@@ -164,20 +164,27 @@ def get_dates_for_construct(protein_construct, test):
             dates.add(date)
     return sorted(dates)
 
-# This helper function determines the legend label for 1Trig-10xHis-1TEL-TV-vWA constructs. We do this because we obeserve two distinct behaviors for the 1 Hour and
-# 48 Hour solubility assays for 1Trig vWA and want to highlight that difference.
-def behavior_label_from_vwa_id(vwa_id):
-    if vwa_id == "W1":
+# This helper function determines if the vWA of PA-UBA 1 Hour solubility data need to be labeld as behavior 1 (ideal) or behavior 2 (non-ideal).
+def behavior_label_from_behavior_id(behavior_id):
+    if behavior_id in ["W1", "P1"]:
         return "Behavior 1"
-    elif vwa_id == "W2":
+    elif behavior_id in ["W2", "P2"]:
         return "Behavior 2"
-    return vwa_id
+    return behavior_id
 
-# This helper function assigns two unique colors to the data points and 4PL curve for the vWA plots that show the different vWA behaviors. It uses the base color assigned
+# This helper function assigns two unique colors to the data points and 4PL curve for the plots that show the different behaviors. It uses the base color assigned
 # to behavior 1 as a reference for determining behavior 2's color.
-def get_vwa_behavior_colors(base_color):
-    return {"W1": base_color,"W2": tuple(max(0, c * 0.65) for c in base_color[:3]) + (base_color[3],) if len(base_color) == 4
-              else tuple(max(0, c * 0.65) for c in base_color[:3])}
+def get_behavior_colors(base_color, behavior_ids):
+    sorted_ids = sorted(behavior_ids)
+    color_map = {}
+    for i, behavior_id in enumerate(sorted_ids):
+        factor = 1.0 - 0.35 * i
+        if len(base_color) == 4:
+            color = tuple(max(0, c * factor) for c in base_color[:3]) + (base_color[3],)
+        else:
+            color = tuple(max(0, c * factor) for c in base_color[:3])
+        color_map[behavior_id] = color
+    return color_map
 
 # This helper function defines the y axis boundaries that the plot can show. We determined each boundary by looking at the plot and deciding how far zoomed in we needed to
 # be in order to see the plot more clearly. This does visually exclude some points from the plot, but it doesn't affect how we calculate the 95% confidence interval or the
@@ -193,11 +200,21 @@ def apply_custom_y_limits(protein_constructs, tests, plot_singly, specific_date=
         (("1TEL-PA-TNK1.UBA",), ("A280_1hr", "A280_48-72hr")): {"ymin": -0.4},
         (tuple(sorted(("2Trig-10xHis-1TEL-TV-vWA", "10xHis-1TEL-TV-vWA"))), ("A280_1hr",)): {"ymin": -0.8},
         (tuple(sorted(("2Trig-1TEL-GG-TNK1.UBA", "1TEL-GG-TNK1.UBA"))), ("A280_1hr",)): {"ymin": -0.4},
-        (tuple(sorted(("2Trig-1TEL-PA-TNK1.UBA", "1TEL-PA-TNK1.UBA"))), ("A280_1hr",)): {"ymin": -0.5},
+        (tuple(sorted(("2Trig-1TEL-PA-TNK1.UBA", "1TEL-PA-TNK1.UBA"))), ("A280_1hr",)): {"ymin": -0.2, "ymax": 1.7},
         (tuple(sorted(("2Trig-10xHis-1TEL-SR-TNK1.UBA", "10xHis-1TEL-SR-TNK1.UBA"))), ("A400",)): {"ymin": -0.2, "ymax": 1.8},}
     limits = single_plot_limits.get(key) if plot_singly else combined_plot_limits.get(key)
     if limits is not None:
         plt.ylim(bottom=limits.get("ymin"), top=limits.get("ymax"))
+
+# This helper function confirms if the dataset demonstrates one of two behaviors. We only have two 1Trig constructs whose solubility data 
+# show unique behaviors, so we only account for them here.
+def is_special_behavior_construct(construct, test_name, protein_constructs, tests):
+    if test_name != "A280_1hr":
+        return False
+    if len(protein_constructs) != 2 or len(tests) != 1:
+        return False
+    special_constructs = ["10xHis-1TEL-TV-vWA","1TEL-PA-TNK1.UBA"]
+    return construct in special_constructs
 
 def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=False,pool=False, specific_date=None,specific_stock_id=None):
     data = {'protein construct':[],'date':[],'pH':[],'test':[],'data':[],'tailored_data':[], 'is_starred':[], 'is_single_omitted':[], 'is_time_omitted':[], 'behavior_id':[]}
@@ -307,19 +324,21 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 unique_dates.add(date)
         biological_n_by_construct[construct] = len(unique_dates)
 
-    biological_n_by_construct_and_vwa = {}
-
+    biological_n_by_construct_and_behavior = {}
     for construct in constructs_by_pH_by_date:
-        biological_n_by_construct_and_vwa[construct] = {}
+        biological_n_by_construct_and_behavior[construct] = {}
         for pH in constructs_by_pH_by_date[construct]:
             for date in constructs_by_pH_by_date[construct][pH]["dates"]:
                 behavior_id = constructs_by_pH_by_date[construct][pH]["dates_behavior_id"].get(date, "").strip()
-                if behavior_id not in biological_n_by_construct_and_vwa[construct]:
-                    biological_n_by_construct_and_vwa[construct][behavior_id] = set()
-                biological_n_by_construct_and_vwa[construct][behavior_id].add(date)
-    for construct in biological_n_by_construct_and_vwa:
-        for behavior_id in biological_n_by_construct_and_vwa[construct]:
-            biological_n_by_construct_and_vwa[construct][behavior_id] = len(biological_n_by_construct_and_vwa[construct][behavior_id])
+                if behavior_id == "":
+                    continue
+                if behavior_id not in biological_n_by_construct_and_behavior[construct]:
+                    biological_n_by_construct_and_behavior[construct][behavior_id] = set()
+                biological_n_by_construct_and_behavior[construct][behavior_id].add(date)
+
+    for construct in biological_n_by_construct_and_behavior:
+        for behavior_id in biological_n_by_construct_and_behavior[construct]:
+            biological_n_by_construct_and_behavior[construct][behavior_id] = len(biological_n_by_construct_and_behavior[construct][behavior_id])
 
     # Compute the 95% CI Band for each pH value within each construct (we use the bonferroni technique).
     alpha_bonferroni = 0.05/11
@@ -414,7 +433,6 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         handles_and_labels = {}
         inflection_handles_and_labels = {}
         legend_groups = {"group1_main": [],"group1_inflection": [],"group1_ci": [],"group2_main": [],"group2_inflection": [],"group2_ci": [],"other": []}
-        is_combined_vwa_1hr_solubility = (len(protein_constructs) == 2 and len(tests) == 1 and tests[0] == "A280_1hr" and "10xHis-1TEL-TV-vWA" in protein_constructs)
         combined_any_omitted_points = False
 
         def change_colors():
@@ -479,7 +497,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         for construct_key in constructs_by_pH_by_date:
             any_starred_points = False
             construct, test_name = construct_key
-            is_special_vwa_construct = (is_combined_vwa_1hr_solubility and test_name == "A280_1hr" and "vWA" in construct and "2Trig" not in construct and "Gravity" not in construct)
+            is_special_behavior_plot = is_special_behavior_construct(construct, test_name, protein_constructs, tests)
             pH_values_fit = []
             means_fit = []
             pH_values_display = []
@@ -495,14 +513,16 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             special_scatter_handles = {}
             # Sort pHs numerically.
             sorted_pHs = sorted(constructs_by_pH_by_date[construct_key].keys(), key=float)
-            vwa_groups = {}
+            behavior_groups = {}
             for pH in sorted_pHs:
                 pH_entry = constructs_by_pH_by_date[construct_key][pH]
-                if is_special_vwa_construct:
+                if is_special_behavior_plot:
                     for date in pH_entry["dates"]:
                         behavior_id = pH_entry["dates_behavior_id"].get(date, "").strip()
-                        if behavior_id not in vwa_groups:
-                            vwa_groups[behavior_id] = {'pH_values': [],'means': [],'ci_lower': [],'ci_upper': []}
+                        if behavior_id == "":
+                            continue
+                        if behavior_id not in behavior_groups:
+                            behavior_groups[behavior_id] = {'pH_values': [],'means': [],'ci_lower': [],'ci_upper': []}
                 # Always keep raw data points for plotting.
                 for date, measurements in pH_entry["dates"].items():
                     star_flags = pH_entry["dates_starred"][date]
@@ -521,10 +541,12 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     continue
                 # The following if and else statements compute statistics for datasets with unique behaviors and add those data to empty lists. We also add any other data
                 # to other lists.
-                if is_special_vwa_construct:
+                if is_special_behavior_plot:
                     subgroup_measurements = {}
                     for date, measurements in pH_entry["dates"].items():
                         behavior_id = pH_entry["dates_behavior_id"].get(date, "").strip()
+                        if behavior_id == "":
+                            continue
                         if behavior_id not in subgroup_measurements:
                             subgroup_measurements[behavior_id] = []
                         star_flags = pH_entry["dates_starred"][date]
@@ -550,10 +572,10 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             err = se_val * t_val
                         else:
                             err = 0.0
-                        vwa_groups[behavior_id]['pH_values'].append(float(pH))
-                        vwa_groups[behavior_id]['means'].append(mean_val)
-                        vwa_groups[behavior_id]['ci_lower'].append(mean_val - err)
-                        vwa_groups[behavior_id]['ci_upper'].append(mean_val + err)
+                        behavior_groups[behavior_id]['pH_values'].append(float(pH))
+                        behavior_groups[behavior_id]['means'].append(mean_val)
+                        behavior_groups[behavior_id]['ci_lower'].append(mean_val - err)
+                        behavior_groups[behavior_id]['ci_upper'].append(mean_val + err)
                 else:
                     # Add CI-band values whenever display stats exist
                     if "mean_display" in pH_entry:
@@ -568,9 +590,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
 
         #--------------------The rest of the code at this point until "if __name__ == '__main__':" deals with curve fitting and plotting---------------------#
 
+            if is_special_behavior_plot:
+                behavior_ids_present = sorted([bid for bid in behavior_groups.keys() if bid != ""])
+                behavior_colors = get_behavior_colors(color_map[construct_key], behavior_ids_present)
+
             try:
-                if is_special_vwa_construct:
-                    for behavior_id, group_data in vwa_groups.items():
+                if is_special_behavior_plot:
+                    for behavior_id, group_data in behavior_groups.items():
                         if len(group_data['pH_values']) < 3:
                             continue
                         group_pH = group_data['pH_values']
@@ -584,19 +610,18 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         inflection_value = round(best_fit_parameters[2],1)
                         if inflection_value <= 4.0:
                             continue
-                        vwa_colors = get_vwa_behavior_colors(color_map[construct_key])
-                        curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=vwa_colors[behavior_id],linestyle="-" if behavior_id == "W1" else "-")
+                        curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=behavior_colors[behavior_id],linestyle="-")
                         line_handle = curve_handle_list[0]
-                        ci_handle = plt.fill_between(group_pH,group_ci_lower,group_ci_upper,color=vwa_colors[behavior_id],alpha=0.12)
-                        handles_and_labels[ci_handle] = f"{behavior_label_from_vwa_id(vwa_id)} 95% CI"
+                        ci_handle = plt.fill_between(group_pH,group_ci_lower,group_ci_upper,color=behavior_colors[behavior_id],alpha=0.12)
+                        handles_and_labels[ci_handle] = f"{behavior_label_from_behavior_id(behavior_id)} 95% CI"
                         legend_groups["group1_ci"].append(ci_handle)
                         inflection_x = display_inflection_x(inflection_value)
-                        inflection_handle = plt.axvline(inflection_x,color=vwa_colors[vwa_id],linestyle=":")
+                        inflection_handle = plt.axvline(inflection_x,color=behavior_colors[behavior_id],linestyle=":")
                         inflection_handles_and_labels[inflection_handle] = (
-                            f"{behavior_label_from_vwa_id(vwa_id)} Inflection: "
+                            f"{behavior_label_from_behavior_id(behavior_id)} Inflection: "
                             f"{format_inflection_label('', inflection_value).replace(': ', '').strip()}")
                         legend_groups["group1_inflection"].append(inflection_handle)
-                        special_curve_handles[vwa_id] = line_handle
+                        special_curve_handles[behavior_id] = line_handle
                 else:
                     pH_linspace = np.linspace(min(pH_values_fit), max(pH_values_fit), 400)
                     initial_guesses = [max(means_fit), -4, 5.5, min(means_fit)]
@@ -649,21 +674,28 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 # plot raw scatter points
                 jitter_strength = 0.08
                 jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength,len(construct_pHs))
-                if is_special_vwa_construct:
+                if is_special_behavior_plot:
                     special_scatter_handles = {}
-                    vwa_colors = get_vwa_behavior_colors(color_map[construct_key])
-                    for vwa_id, marker_style in [("W1", "^"), ("W2", "s")]:
-                        xs = [x for x, gid in zip(jittered_pHs, construct_vwa_ids) if gid == vwa_id]
-                        ys = [y for y, gid in zip(construct_data, construct_vwa_ids) if gid == vwa_id]
+                    behavior_ids_present = sorted(set([bid for bid in construct_behavior_ids if bid != ""]))
+                    behavior_colors = get_behavior_colors(color_map[construct_key], behavior_ids_present)
+
+                    available_markers = ["^", "s", "o", "D", "v", "P", "X"]
+                    marker_map = {bid: available_markers[i % len(available_markers)] for i, bid in enumerate(behavior_ids_present)}
+
+                    for behavior_id, marker_style in marker_map.items():
+                        xs = [x for x, gid in zip(jittered_pHs, construct_behavior_ids) if gid == behavior_id]
+                        ys = [y for y, gid in zip(construct_data, construct_behavior_ids) if gid == behavior_id]
                         if len(xs) > 0:
-                            scatter_handle = plt.scatter(xs,ys,marker=marker_style,color=vwa_colors[vwa_id],alpha=0.2)
-                            special_scatter_handles[vwa_id] = scatter_handle
-                    for vwa_id in special_curve_handles:
-                        line_handle = special_curve_handles[vwa_id]
-                        scatter_handle = special_scatter_handles.get(vwa_id)
-                        behavior_label = behavior_label_from_vwa_id(vwa_id)
-                        subgroup_n = biological_n_by_construct_and_vwa.get(construct_key, {}).get(vwa_id, 0)
-                        base_label = format_legend_label(construct,test_name,protein_constructs,tests,subgroup_n)
+                            scatter_handle = plt.scatter(xs, ys, marker=marker_style, color=behavior_colors[behavior_id], alpha=0.2)
+                            special_scatter_handles[behavior_id] = scatter_handle
+
+                    for behavior_id in special_curve_handles:
+                        line_handle = special_curve_handles[behavior_id]
+                        scatter_handle = special_scatter_handles.get(behavior_id)
+                        behavior_label = behavior_label_from_behavior_id(behavior_id)
+                        subgroup_n = biological_n_by_construct_and_behavior.get(construct_key, {}).get(behavior_id, 0)
+                        base_label = format_legend_label(construct, test_name, protein_constructs, tests, subgroup_n)
+
                         if scatter_handle is not None:
                             pair_handle = (line_handle, scatter_handle)
                             handles_and_labels[pair_handle] = f"{base_label}, {behavior_label}"
@@ -688,7 +720,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         plt.annotate("*",(x, y),xytext=(0.005, 0.00005),textcoords="offset points",ha="left",va="bottom",color="black",fontsize=11,fontweight="light",zorder=6)
                     any_starred_points = True
                     combined_any_omitted_points = True
-                if not is_special_vwa_construct:
+                if not is_special_behavior_plot:
                     legend_label = format_legend_label(construct,test_name,protein_constructs,tests,biological_n_by_construct[construct_key])
                     pair_handle = (line_handle, scatter_handle)
                     handles_and_labels[pair_handle] = legend_label
@@ -1009,29 +1041,29 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             plt.close()
 
 if __name__ == '__main__':
-    #for protein_construct in protein_dict:
-     #   if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+    for protein_construct in protein_dict:
+        if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
             # Single-trigger A400: one plot per replicate date
-      #      for date in get_dates_for_construct(f'{protein_construct}', 'A400'):
-       #         statisticize([(f'{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
+            for date in get_dates_for_construct(f'{protein_construct}', 'A400'):
+                statisticize([(f'{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
             # Double-trigger A400: one plot per replicate date
-        #    for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A400'):
-         #       statisticize([(f'2Trig-{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
-          #  for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A400'):
-           #     statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A400')],plot=True, plot_singly=True, specific_date=date)
+            for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A400'):
+               statisticize([(f'2Trig-{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
+            for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A400'):
+                statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A400')],plot=True, plot_singly=True, specific_date=date)
              #Single vs. Double-trigger A400
-            #statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
+            statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
 
-    #for protein_construct in protein_dict:
-     #   if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+    for protein_construct in protein_dict:
+        if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
             # Single-trigger A280 1 hr: one plot per replicate date
-      #      for date in get_dates_for_construct(f'{protein_construct}', 'A280_1hr'):
-       #         statisticize([(f'{protein_construct}', 'A280_1hr')],plot=True,plot_singly=True,specific_date=date)
+            for date in get_dates_for_construct(f'{protein_construct}', 'A280_1hr'):
+                statisticize([(f'{protein_construct}', 'A280_1hr')],plot=True,plot_singly=True,specific_date=date)
             # Double-trigger A280 1 hr: one plot per replicate date
-        #    for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A280_1hr'):
-         #       statisticize([(f'2Trig-{protein_construct}', 'A280_1hr')],plot=True,plot_singly=True,specific_date=date)
+            for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A280_1hr'):
+                statisticize([(f'2Trig-{protein_construct}', 'A280_1hr')],plot=True,plot_singly=True,specific_date=date)
             # Single vs. Double-trigger A280-1hr
-          #  statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
+            statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
 
     for protein_construct in protein_dict:
         if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
@@ -1054,13 +1086,15 @@ if __name__ == '__main__':
             statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True,tailored=True)
 
     # Plot the individual Gravity replicates for A400, A280 1 HR, and A280 48-72 HR
-    #for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A400'):
-     #   statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A400')], plot=True, plot_singly=True, specific_date=date)
+    for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A400'):
+        statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A400')], plot=True, plot_singly=True, specific_date=date)
     for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A280_1hr'):
         statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A280_1hr')], plot=True, plot_singly=True, specific_date=date)
     for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A280_48-72hr'):
         statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A280_48-72hr')], plot=True, plot_singly=True, specific_date=date)
     # Single trigger TV-vWA A400, A280 1 HR, A280 48-72 HR, A280 1 HR vs 48-72 HR
     statisticize([('10xHis-1TEL-TV-vWA','A280_48-72hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_48-72hr')],plot=True)
-    #statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
+    statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
     statisticize([('10xHis-1TEL-TV-vWA','A280_1hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_1hr')],plot=True)
+    # Single-Trigger vs Double-Trigger 1TEL-PA-TNK1.UBA 1 Hour vs. 48 Hour with both behaviors
+    statisticize([(f'1TEL-PA-TNK1.UBA','A280_1hr'), (f'2Trig-1TEL-PA-TNK1.UBA','A280_1hr')],plot=True,tailored=True)
