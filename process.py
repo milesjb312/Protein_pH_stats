@@ -30,7 +30,7 @@ with open(CSV_PATH, newline="", encoding="utf-8-sig") as csvfile:
             protein_dict[protein_construct] = {}
         bio_rep_key = row['Date'] + "_" + row['Stock Concentration mg/mL'] + '_mg/mL_pH_' + row['pH']
         if bio_rep_key not in protein_dict[protein_construct]:
-            protein_dict[protein_construct][bio_rep_key] = {'A400': [],'A280_1hr': [],'A280_48-72hr': [],'Stock ID': row.get('Stock ID', '').strip(),'vWA ID': row.get('vWA ID', '').strip()}
+            protein_dict[protein_construct][bio_rep_key] = {'A400': [],'A280_1hr': [],'A280_48-72hr': [],'Stock ID': row.get('Stock ID', '').strip(),'Behavior ID': row.get('Behavior ID', '').strip()}
         if row['A400'] != "":
             raw_value = row['A400'].strip()
             if '*' in raw_value or '^' in raw_value or '~' in raw_value:
@@ -145,9 +145,9 @@ def display_inflection_x(inflection_value):
 # This helper function creates the legend label for the inflection point line. 
 def format_inflection_label(prefix, inflection_value):
     if inflection_value <= 4.0:
-        return f"{prefix}: pH ≤ 4.5"
+        return f"{prefix}: pH < 4.5"
     elif inflection_value >= 9.0:
-        return f"{prefix}: pH ≥ 8.5"
+        return f"{prefix}: pH > 8.5"
     else:
         return f"{prefix}: pH = {inflection_value:.1f}"
 
@@ -200,7 +200,7 @@ def apply_custom_y_limits(protein_constructs, tests, plot_singly, specific_date=
         plt.ylim(bottom=limits.get("ymin"), top=limits.get("ymax"))
 
 def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=False,pool=False, specific_date=None,specific_stock_id=None):
-    data = {'protein construct':[],'date':[],'pH':[],'test':[],'data':[],'tailored_data':[], 'is_starred':[], 'is_single_omitted':[], 'is_time_omitted':[], 'vwa_id':[]}
+    data = {'protein construct':[],'date':[],'pH':[],'test':[],'data':[],'tailored_data':[], 'is_starred':[], 'is_single_omitted':[], 'is_time_omitted':[], 'behavior_id':[]}
     protein_constructs = []
     tests = []
     for protein_construct,test in proteins_and_tests:
@@ -230,8 +230,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     pH = bio_rep.split("_")[-1]
                     data['pH'].append(pH)
                     data['test'].append(test)
-                    vwa_id = protein_dict[protein_construct][bio_rep].get('vWA ID', '').strip()
-                    data['vwa_id'].append(vwa_id)
+                    behavior_id = protein_dict[protein_construct][bio_rep].get('Behavior ID', '').strip()
+                    data['behavior_id'].append(behavior_id)
                     concentration = float(bio_rep.split("_")[1])
                     theoretical_max_concentration = concentration/5
 
@@ -286,7 +286,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         is_single_omitted = data['is_single_omitted'][replicate]
         is_time_omitted = data['is_time_omitted'][replicate]
         if pH not in constructs_by_pH_by_date[construct_key]:
-            constructs_by_pH_by_date[construct_key][pH] = {"dates": {},"dates_starred": {},"dates_single_omitted": {},"dates_time_omitted": {},"dates_vwa_id": {}}
+            constructs_by_pH_by_date[construct_key][pH] = {"dates": {},"dates_starred": {},"dates_single_omitted": {},"dates_time_omitted": {},"dates_behavior_id": {}}
         if date not in constructs_by_pH_by_date[construct_key][pH]["dates"]:
             constructs_by_pH_by_date[construct_key][pH]["dates"][date] = []
             constructs_by_pH_by_date[construct_key][pH]["dates_starred"][date] = []
@@ -296,7 +296,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         constructs_by_pH_by_date[construct_key][pH]["dates_starred"][date].append(is_starred)
         constructs_by_pH_by_date[construct_key][pH]["dates_single_omitted"][date].append(is_single_omitted)
         constructs_by_pH_by_date[construct_key][pH]["dates_time_omitted"][date].append(is_time_omitted)
-        constructs_by_pH_by_date[construct_key][pH]["dates_vwa_id"][date] = data['vwa_id'][replicate]
+        constructs_by_pH_by_date[construct_key][pH]["dates_behavior_id"][date] = data['behavior_id'][replicate]
 
     biological_n_by_construct = {}
 
@@ -313,13 +313,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         biological_n_by_construct_and_vwa[construct] = {}
         for pH in constructs_by_pH_by_date[construct]:
             for date in constructs_by_pH_by_date[construct][pH]["dates"]:
-                vwa_id = constructs_by_pH_by_date[construct][pH]["dates_vwa_id"].get(date, "").strip()
-                if vwa_id not in biological_n_by_construct_and_vwa[construct]:
-                    biological_n_by_construct_and_vwa[construct][vwa_id] = set()
-                biological_n_by_construct_and_vwa[construct][vwa_id].add(date)
+                behavior_id = constructs_by_pH_by_date[construct][pH]["dates_behavior_id"].get(date, "").strip()
+                if behavior_id not in biological_n_by_construct_and_vwa[construct]:
+                    biological_n_by_construct_and_vwa[construct][behavior_id] = set()
+                biological_n_by_construct_and_vwa[construct][behavior_id].add(date)
     for construct in biological_n_by_construct_and_vwa:
-        for vwa_id in biological_n_by_construct_and_vwa[construct]:
-            biological_n_by_construct_and_vwa[construct][vwa_id] = len(biological_n_by_construct_and_vwa[construct][vwa_id])
+        for behavior_id in biological_n_by_construct_and_vwa[construct]:
+            biological_n_by_construct_and_vwa[construct][behavior_id] = len(biological_n_by_construct_and_vwa[construct][behavior_id])
 
     # Compute the 95% CI Band for each pH value within each construct (we use the bonferroni technique).
     alpha_bonferroni = 0.05/11
@@ -489,7 +489,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             construct_data = []
             construct_starred = []
             construct_single_omitted = []
-            construct_vwa_ids = []
+            construct_behavior_ids = []
             construct_time_omitted = []
             special_curve_handles = {}
             special_scatter_handles = {}
@@ -500,33 +500,33 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 pH_entry = constructs_by_pH_by_date[construct_key][pH]
                 if is_special_vwa_construct:
                     for date in pH_entry["dates"]:
-                        vwa_id = pH_entry["dates_vwa_id"].get(date, "").strip()
-                        if vwa_id not in vwa_groups:
-                            vwa_groups[vwa_id] = {'pH_values': [],'means': [],'ci_lower': [],'ci_upper': []}
+                        behavior_id = pH_entry["dates_behavior_id"].get(date, "").strip()
+                        if behavior_id not in vwa_groups:
+                            vwa_groups[behavior_id] = {'pH_values': [],'means': [],'ci_lower': [],'ci_upper': []}
                 # Always keep raw data points for plotting.
                 for date, measurements in pH_entry["dates"].items():
                     star_flags = pH_entry["dates_starred"][date]
                     single_omit_flags = pH_entry["dates_single_omitted"][date]
                     time_omit_flags = pH_entry["dates_time_omitted"][date]
-                    vwa_id = pH_entry["dates_vwa_id"].get(date, "").strip()
+                    behavior_id = pH_entry["dates_behavior_id"].get(date, "").strip()
                     for measurement, is_starred, is_single_omitted, is_time_omitted in zip(measurements, star_flags, single_omit_flags, time_omit_flags):
                         construct_pHs.append(float(pH))
                         construct_data.append(measurement)
                         construct_starred.append(is_starred)
                         construct_single_omitted.append(is_single_omitted)
-                        construct_vwa_ids.append(vwa_id)
+                        construct_behavior_ids.append(behavior_id)
                         construct_time_omitted.append(is_time_omitted)
                 # If we weren't able to compute statistics for data at a certain pH then we don't plot the confidence interval bands or any of the scatter points.
                 if "mean" not in pH_entry and "mean_display" not in pH_entry:
                     continue
-                # The following if and else statements compute statistics for vWA datasets with unique behaviors and add those data to empty lists. We also add any other data
+                # The following if and else statements compute statistics for datasets with unique behaviors and add those data to empty lists. We also add any other data
                 # to other lists.
                 if is_special_vwa_construct:
                     subgroup_measurements = {}
                     for date, measurements in pH_entry["dates"].items():
-                        vwa_id = pH_entry["dates_vwa_id"].get(date, "").strip()
-                        if vwa_id not in subgroup_measurements:
-                            subgroup_measurements[vwa_id] = []
+                        behavior_id = pH_entry["dates_behavior_id"].get(date, "").strip()
+                        if behavior_id not in subgroup_measurements:
+                            subgroup_measurements[behavior_id] = []
                         star_flags = pH_entry["dates_starred"][date]
                         single_omit_flags = pH_entry["dates_single_omitted"][date]
                         time_omit_flags = pH_entry["dates_time_omitted"][date]
@@ -537,8 +537,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             paired = [(d, s, so, to) for d, s, so, to in paired if not so]
                         if is_time_comparison:
                             paired = [(d, s, so, to) for d, s, so, to in paired if not to]
-                        subgroup_measurements[vwa_id].extend([d for d, s, so, to in paired])
-                    for vwa_id, vals in subgroup_measurements.items():
+                        subgroup_measurements[behavior_id].extend([d for d, s, so, to in paired])
+                    for behavior_id, vals in subgroup_measurements.items():
                         if len(vals) == 0:
                             continue
                         vals = np.array(vals, dtype=float)
@@ -550,10 +550,10 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             err = se_val * t_val
                         else:
                             err = 0.0
-                        vwa_groups[vwa_id]['pH_values'].append(float(pH))
-                        vwa_groups[vwa_id]['means'].append(mean_val)
-                        vwa_groups[vwa_id]['ci_lower'].append(mean_val - err)
-                        vwa_groups[vwa_id]['ci_upper'].append(mean_val + err)
+                        vwa_groups[behavior_id]['pH_values'].append(float(pH))
+                        vwa_groups[behavior_id]['means'].append(mean_val)
+                        vwa_groups[behavior_id]['ci_lower'].append(mean_val - err)
+                        vwa_groups[behavior_id]['ci_upper'].append(mean_val + err)
                 else:
                     # Add CI-band values whenever display stats exist
                     if "mean_display" in pH_entry:
@@ -570,7 +570,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
 
             try:
                 if is_special_vwa_construct:
-                    for vwa_id, group_data in vwa_groups.items():
+                    for behavior_id, group_data in vwa_groups.items():
                         if len(group_data['pH_values']) < 3:
                             continue
                         group_pH = group_data['pH_values']
@@ -585,9 +585,9 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         if inflection_value <= 4.0:
                             continue
                         vwa_colors = get_vwa_behavior_colors(color_map[construct_key])
-                        curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=vwa_colors[vwa_id],linestyle="-" if vwa_id == "W1" else "-")
+                        curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=vwa_colors[behavior_id],linestyle="-" if behavior_id == "W1" else "-")
                         line_handle = curve_handle_list[0]
-                        ci_handle = plt.fill_between(group_pH,group_ci_lower,group_ci_upper,color=vwa_colors[vwa_id],alpha=0.12)
+                        ci_handle = plt.fill_between(group_pH,group_ci_lower,group_ci_upper,color=vwa_colors[behavior_id],alpha=0.12)
                         handles_and_labels[ci_handle] = f"{behavior_label_from_vwa_id(vwa_id)} 95% CI"
                         legend_groups["group1_ci"].append(ci_handle)
                         inflection_x = display_inflection_x(inflection_value)
@@ -772,10 +772,10 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     else:
                         inflection_color = "red"
                     inflection_handle = plt.axvline(4.5, color=inflection_color, linestyle="--")
-                    handles_and_labels[inflection_handle] = "Inflection Point: pH ≤ 4.5"
+                    handles_and_labels[inflection_handle] = "Inflection Point: pH < 4.5"
                 if (plot_singly and construct == "10xHis-1TEL-TV-vWA" and test_name == "A400" and specific_date == "1/28/2026"):
                     inflection_handle = plt.axvline(4.5, color="blue", linestyle="--")
-                    handles_and_labels[inflection_handle] = "Inflection Point: pH ≤ 4.5"
+                    handles_and_labels[inflection_handle] = "Inflection Point: pH < 4.5"
 
             if plot_singly:
                 if test_name == "A400":
@@ -844,7 +844,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         legend_groups["group1_inflection"].append(inflection_1hr)
                     elif protein_constructs[0] == "2Trig-10xHis-1TEL-SR-DARPin":
                         inflection_1hr = plt.axvline(4.5, color="darkorange", linestyle="--")
-                        inflection_handles_and_labels[inflection_1hr] = "1 Hour Inflection: pH ≤ 4.5"
+                        inflection_handles_and_labels[inflection_1hr] = "1 Hour Inflection: pH < 4.5"
                         legend_groups["group1_inflection"].append(inflection_1hr)
 
                     if len(inflection_points_2trig_48hr) >= 1:
@@ -855,7 +855,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         legend_groups["group2_inflection"].append(inflection_48hr)
                     elif protein_constructs[0] == "2Trig-10xHis-1TEL-SR-DARPin":
                         inflection_48hr = plt.axvline(4.5, color="purple", linestyle="--")
-                        inflection_handles_and_labels[inflection_48hr] = "48 Hour Inflection: pH ≤ 4.5"
+                        inflection_handles_and_labels[inflection_48hr] = "48 Hour Inflection: pH < 4.5"
                         legend_groups["group2_inflection"].append(inflection_48hr)
 
                 elif "Gravity" in protein_constructs[0]:
@@ -960,7 +960,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             and any(c == "2Trig-10xHis-1TEL-SR-DARPin" for c in protein_constructs))
                     if is_darpin_comparison:
                         inflection_2 = plt.axvline(4.50, color=color_2trig, linestyle="--")
-                        inflection_handles_and_labels[inflection_2] = "2Trig Inflection: pH ≤ 4.5"
+                        inflection_handles_and_labels[inflection_2] = "2Trig Inflection: pH < 4.5"
                         legend_groups["group2_inflection"].append(inflection_2)
             if "A400" == tests[0]:
                 y_axis = 'Normalized Absorbance Units'
