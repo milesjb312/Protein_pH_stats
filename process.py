@@ -1,5 +1,5 @@
 # Discloser: The authors of this code used ChatGPT services to develop and edit most of the code. The authors reviewed every line of AI-produced code before implementation
-# to ensure that it performed the desired functions without innapropriately changing or removing data.
+# to ensure that it performed the desired functions without inapropriately changing or removing data.
 
 import csv
 from scipy.optimize import curve_fit
