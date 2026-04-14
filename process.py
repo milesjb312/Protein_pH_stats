@@ -6,6 +6,7 @@ from scipy.optimize import curve_fit
 from scipy.stats import t
 import matplotlib.pyplot as plt
 from matplotlib.legend_handler import HandlerTuple
+import matplotlib.ticker as mticker
 import numpy as np
 from pathlib import Path
 
@@ -856,6 +857,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         seen.add(h)
                 labels = [handles_and_labels[h] for h in handles]
                 apply_custom_y_limits(protein_constructs, tests, plot_singly=True, specific_date=specific_date)
+                ax = plt.gca()
+                ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
                 plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
                 safe_date_text = date_text.replace("/", "-").replace(", ", "_").replace(" ", "_")
                 plt.savefig(f"{construct.replace('/', '_')}_{test_name}_{safe_date_text}_single.png",dpi=300,bbox_inches="tight")
@@ -1033,6 +1036,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     seen.add(h)
             labels = [handles_and_labels[h] for h in handles]
             apply_custom_y_limits(protein_constructs, tests, plot_singly=False, specific_date=specific_date)
+            ax = plt.gca()
+            ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
             plt.legend(handles, labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
             safe_constructs = "_vs_".join([p.replace("/", "_") for p in protein_constructs])
             safe_tests = "_vs_".join(tests)
