@@ -31,7 +31,7 @@ with open(CSV_PATH, newline="", encoding="utf-8-sig") as csvfile:
             protein_dict[protein_construct] = {}
         bio_rep_key = row['Date'] + "_" + row['Stock Concentration mg/mL'] + '_mg/mL_pH_' + row['pH']
         if bio_rep_key not in protein_dict[protein_construct]:
-            protein_dict[protein_construct][bio_rep_key] = {'A400': [],'A280_1hr': [],'A280_48-72hr': [],'Stock ID': row.get('Stock ID', '').strip(),'Behavior ID': row.get('Behavior ID', '').strip()}
+            protein_dict[protein_construct][bio_rep_key] = {'A400': [],'A280_1hr': [],'A280_48hr': [],'A280_72hr': [],'Stock ID': row.get('Stock ID', '').strip(),'Behavior ID': row.get('Behavior ID', '').strip()}
         if row['A400'] != "":
             raw_value = row['A400'].strip()
             if '*' in raw_value or '^' in raw_value or '~' in raw_value:
@@ -44,12 +44,17 @@ with open(CSV_PATH, newline="", encoding="utf-8-sig") as csvfile:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_1hr'].append(raw_value)
             else:
                 protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_1hr'].append(float(raw_value))
-        if row['A280_48-72hr']!="":
+        if row['A280_48-72hr'] != "":
             raw_value = row['A280_48-72hr'].strip()
-            if '*' in raw_value or '^' in raw_value or '~' in raw_value:
-                protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(raw_value)
+            timepoint = row.get('A280_48-72hr Time', '').strip().lower()
+            if timepoint == "72":
+                time_test = "A280_72hr"
             else:
-                protein_dict[protein_construct][row['Date']+"_"+row['Stock Concentration mg/mL']+'_mg/mL_pH_'+row['pH']]['A280_48-72hr'].append(float(raw_value))
+                time_test = "A280_48hr"
+            if '*' in raw_value or '^' in raw_value or '~' in raw_value:
+                protein_dict[protein_construct][bio_rep_key][time_test].append(raw_value)
+            else:
+                protein_dict[protein_construct][bio_rep_key][time_test].append(float(raw_value))
 
 """
 The next two helper functions format the title and legend for each plot using the information in protein_dict. Each plot is titled with the base protein and the legend specifies which
@@ -90,48 +95,51 @@ def format_protein_title(construct_name: str) -> str:
         target_protein = "Unknown"
     return f"{tag}{scaffold}-{linker}-{target_protein}"
 
+def time_label_from_test(test_name):
+    if test_name == "A280_1hr":
+        return "1 Hour"
+    elif test_name == "A280_48hr":
+        return "48 Hour"
+    elif test_name == "A280_72hr":
+        return "72 Hour"
+    return ""
+
 def format_legend_label(construct, test_name, protein_constructs, tests, n):
-    # Booleans that are used to determine the specific labels each plot needs in the legend.
     is_2trig = "2Trig" in construct
     is_gravity = "Gravity" in construct
     is_vwa_1trig = any(("vWA" in c) and ("2Trig" not in c) for c in protein_constructs)
     has_1hr = "A280_1hr" in tests
-    has_48hr = "A280_48-72hr" in tests
-    is_solubility = test_name in ["A280_1hr", "A280_48-72hr"]
-    # Case 1: Is this plot copmaring ÄKTA vs Gravity, 1Trig vs 2Trig, and/or 1 Hour vs 48 Hour Solubility?
+    has_later_timepoint = any(t in tests for t in ["A280_48hr", "A280_72hr"])
+    is_solubility = test_name in ["A280_1hr", "A280_48hr", "A280_72hr"]
+    # Case 1: comparing two constructs with one assay/timepoint
     if len(protein_constructs) == 2 and len(tests) == 1:
         if is_vwa_1trig and any("Gravity" in c for c in protein_constructs):
             base_label = "Gravity" if is_gravity else "ÄKTA"
         else:
             base_label = "2Trig" if is_2trig else "1Trig"
-        if test_name == "A280_1hr":
-            label = f"{base_label} 1 Hour"
-        elif test_name == "A280_48-72hr":
-            label = f"{base_label} 48 Hour"
+        if is_solubility:
+            label = f"{base_label} {time_label_from_test(test_name)}"
         else:
             label = base_label
-    # Case 2: Is this plot a 1 Hour vs 48 Hour comparison for one protein construct?
-    elif len(protein_constructs) == 1 and has_1hr and has_48hr:
+    # Case 2: comparing 1 hour vs later timepoint for one construct
+    elif len(protein_constructs) == 1 and has_1hr and has_later_timepoint:
         if is_gravity:
             trig_label = "Gravity"
         else:
             trig_label = "2Trig" if is_2trig else "1Trig"
-        time_label = "1 Hour" if test_name == "A280_1hr" else "48 Hour"
-        label = f"{trig_label} {time_label}"
-    # Case 3: Is this plot showing data from one replicate for one protein construct?
+        label = f"{trig_label} {time_label_from_test(test_name)}"
+    # Case 3: one replicate / one construct / one test
     elif len(protein_constructs) == 1 and len(tests) == 1:
         if is_gravity:
             base_label = "Gravity"
         else:
             base_label = "2Trig" if is_2trig else "1Trig"
         if is_solubility:
-            time_label = "1 Hour" if test_name == "A280_1hr" else "48 Hour"
-            label = f"{base_label} {time_label}"
+            label = f"{base_label} {time_label_from_test(test_name)}"
         else:
             label = base_label
     else:
         label = construct
-    # Include the number of replicates represented by "n".
     return f"{label} (n = {n})"
 
 # This helper function determines whether the inflection value needs to be set at 4.5 or 8.5.
@@ -157,12 +165,17 @@ def format_inflection_label(prefix, inflection_value):
 def get_dates_for_construct(protein_construct, test):
     if protein_construct not in protein_dict:
         return []
+    if test == "A280_48-72hr":
+        tests_to_check = ["A280_48hr", "A280_72hr"]
+    else:
+        tests_to_check = [test]
     dates = set()
     for bio_rep in protein_dict[protein_construct]:
         date = bio_rep.split("_")[0]
-        values = protein_dict[protein_construct][bio_rep][test]
-        if len(values) != 0:
-            dates.add(date)
+        for test_to_check in tests_to_check:
+            values = protein_dict[protein_construct][bio_rep].get(test_to_check, [])
+            if len(values) != 0:
+                dates.add(date)
     return sorted(dates)
 
 # This helper function determines if the vWA of PA-UBA 1 Hour solubility data need to be labeld as behavior 1 (ideal) or behavior 2 (non-ideal).
@@ -216,9 +229,29 @@ def is_special_behavior_construct(construct, test_name, protein_constructs, test
         return False
     special_constructs = ["10xHis-1TEL-TV-vWA","1TEL-PA-TNK1.UBA"]
     return construct in special_constructs
+  
+def expand_tests_by_available_timepoints(proteins_and_tests):
+    expanded = []
+    for protein_construct, test in proteins_and_tests:
+        if test != "A280_48-72hr":
+            expanded.append((protein_construct, test))
+            continue
+        has_48hr = False
+        has_72hr = False
+        for bio_rep in protein_dict.get(protein_construct, {}):
+            if len(protein_dict[protein_construct][bio_rep].get("A280_48hr", [])) > 0:
+                has_48hr = True
+            if len(protein_dict[protein_construct][bio_rep].get("A280_72hr", [])) > 0:
+                has_72hr = True
+        if has_48hr:
+            expanded.append((protein_construct, "A280_48hr"))
+        if has_72hr:
+            expanded.append((protein_construct, "A280_72hr"))
+    return expanded  
 
 def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=False,pool=False, specific_date=None,specific_stock_id=None):
     data = {'protein construct':[],'date':[],'pH':[],'test':[],'data':[],'tailored_data':[], 'is_starred':[], 'is_single_omitted':[], 'is_time_omitted':[], 'behavior_id':[]}
+    proteins_and_tests = expand_tests_by_available_timepoints(proteins_and_tests)
     protein_constructs = []
     tests = []
     for protein_construct,test in proteins_and_tests:
@@ -226,7 +259,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             protein_constructs.append(protein_construct)
         if test not in tests:
             tests.append(test)
-    is_time_comparison = (len(protein_constructs) == 1 and "A280_1hr" in tests and "A280_48-72hr" in tests)
+    is_time_comparison = (len(protein_constructs) == 1 and "A280_1hr" in tests and any(t in tests for t in ["A280_48hr", "A280_72hr"]))
     for protein_construct,test in proteins_and_tests:
         for bio_rep in protein_dict[protein_construct]:
             date = bio_rep.split("_")[0]
@@ -237,8 +270,9 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 continue
             if is_time_comparison:
                 has_1hr = len(protein_dict[protein_construct][bio_rep]["A280_1hr"]) != 0
-                has_48hr = len(protein_dict[protein_construct][bio_rep]["A280_48-72hr"]) != 0
-                if not (has_1hr and has_48hr):
+                has_later_timepoint = (
+                    len(protein_dict[protein_construct][bio_rep].get("A280_48hr", [])) != 0 or len(protein_dict[protein_construct][bio_rep].get("A280_72hr", [])) != 0)
+                if not (has_1hr and has_later_timepoint):
                     continue
             if len(protein_dict[protein_construct][bio_rep][test])!=0:
                 #if the biological replicate actually had this test done, aggregate its data into the dataframe replicate by replicate, conserving their order.
@@ -269,7 +303,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         numeric_replicate = float(replicate_str.replace("*", "").replace("^", "").replace("~", ""))
 
                     # Normalized Precipitation Loss (solubility plots)
-                    if test in ['A280_1hr', 'A280_48-72hr']:
+                    if test in ['A280_1hr', 'A280_48hr', 'A280_72hr']:
                         value = (theoretical_max_concentration - numeric_replicate) / theoretical_max_concentration
                     # Normalized Absorbance (turbidity plots)
                     else:
@@ -416,19 +450,19 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
     # Group 1 will be placed higher than group 2 in the legend.
     def classify_legend_group(construct, test_name, protein_constructs, tests):
         is_gravity_comparison = (len(protein_constructs) == 2 and len(tests) == 1 and any("Gravity" in c for c in protein_constructs))
-        is_time_comparison = (len(protein_constructs) == 1 and "A280_1hr" in tests and "A280_48-72hr" in tests)
+        is_time_comparison = (len(protein_constructs) == 1 and "A280_1hr" in tests and any(t in tests for t in ["A280_48hr", "A280_72hr"]))
         if is_gravity_comparison:
             if "Gravity" in construct:
                 return "group2"
-            return "group1"  # ÄKTA first in legend
+            return "group1"
         if is_time_comparison:
-            if test_name == "A280_48-72hr":
+            if test_name in ["A280_48hr", "A280_72hr"]:
                 return "group2"
-            return "group1"  # 1 Hour first in legend
+            return "group1"
         if "2Trig" in construct:
             return "group2"
-        return "group1" # 1 Trig first in legend
-
+        return "group1"
+    
     if plot==True:
         plt.figure(figsize=(8.75,6))
         handles_and_labels = {}
@@ -445,13 +479,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             keys_Gravity_48_hour = []
             for construct_key in constructs_by_pH_by_date:
                 construct, test_name = construct_key
-                if "Gravity" in construct and test_name == "A280_48-72hr":
+                if "Gravity" in construct and test_name in ["A280_48hr", "A280_72hr"]:
                     keys_Gravity_48_hour.append(construct_key)
                 elif "Gravity" in construct:
                     keys_Gravity.append(construct_key)
-                elif test_name == "A280_48-72hr" and not '2Trig' in construct:
+                elif test_name in ["A280_48hr", "A280_72hr"] and not '2Trig' in construct:
                     keys_48_hour.append(construct_key)
-                elif test_name == 'A280_48-72hr' and '2Trig' in construct:
+                elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
                     keys_2Trig_48_hour.append(construct_key)
                 elif "2Trig" in construct:
                     keys_2trig.append(construct_key)
@@ -631,40 +665,46 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     if inflection_value <= 4.0:
                         raise ValueError(f"Calculated inflection point ({inflection_value:.1f}) is <= 4.0")
                     if "Gravity" in construct:
-                        if test_name == "A280_48-72hr":
+                        if test_name in ["A280_48hr", "A280_72hr"]:
                             inflection_points_gravity_48hr.append(inflection_value)
                         else:
                             inflection_points_gravity_1hr.append(inflection_value)
                     elif "2Trig" in construct:
-                        if test_name == "A280_48-72hr":
+                        if test_name in ["A280_48hr", "A280_72hr"]:
                             inflection_points_2trig_48hr.append(inflection_value)
                         else:
                             inflection_points_2trig_1hr.append(inflection_value)
                     else:
-                        if test_name == "A280_48-72hr":
+                        if test_name in ["A280_48hr", "A280_72hr"]:
                             inflection_points_1trig_48hr.append(inflection_value)
                         else:
                             inflection_points_1trig_1hr.append(inflection_value)
                     curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=color_map[construct_key])
                     line_handle = curve_handle_list[0]
-                    if "Gravity" in construct and test_name == 'A280_48-72hr':
+                    if "Gravity" in construct and test_name in ["A280_48hr", "A280_72hr"]:
                         ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='brown', alpha=0.20)
-                        ci_label = "Gravity 48 Hour 95% CI"
+                        ci_label = f"Gravity {time_label_from_test(test_name)} 95% CI"
                     elif "Gravity" in construct and test_name == 'A280_1hr':
                         ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
                         ci_label = "Gravity 1 Hour 95% CI"
                     elif "Gravity" in construct:
                         ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
                         ci_label = "Gravity 95% CI"
-                    elif test_name == "A280_48-72hr" and "2Trig" not in construct:
+                    elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" not in construct:
                         ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
-                        ci_label = "1Trig 48 Hour 95% CI"
-                    elif test_name == "A280_48-72hr" and "2Trig" in construct:
+                        ci_label = f"1Trig {time_label_from_test(test_name)} 95% CI"
+                    elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
                         ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
-                        ci_label = "2Trig 48 Hour 95% CI"
+                        ci_label = f"2Trig {time_label_from_test(test_name)} 95% CI"
+                    elif "2Trig" in construct and test_name == 'A280_1hr':
+                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
+                        ci_label = "2Trig 1 Hour 95% CI"
                     elif "2Trig" in construct:
                         ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
                         ci_label = "2Trig 95% CI"
+                    elif test_name == 'A280_1hr' and "2Trig" not in construct:
+                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
+                        ci_label = "1Trig 1 Hour 95% CI"
                     else:
                         ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
                         ci_label = "1Trig 95% CI"
@@ -730,13 +770,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
 
                 if plot_singly:
                     inflection_x = display_inflection_x(inflection_value)
-                    if "Gravity" in construct and test_name == "A280_48-72hr":
+                    if "Gravity" in construct and test_name in ["A280_48hr", "A280_72hr"]:
                         inflection_color = 'brown'
                     elif "Gravity" in construct:
                         inflection_color = "green"
-                    elif test_name == "A280_48-72hr" and "2Trig" in construct:
+                    elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
                         inflection_color = "indigo"
-                    elif test_name == "A280_48-72hr" and "2Trig" not in construct:
+                    elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" not in construct:
                         inflection_color = "purple"
                     elif "2Trig" in construct:
                         inflection_color = "red"
@@ -767,9 +807,9 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             construct_time_omitted.append(is_time_omitted)
                 if "Gravity" in construct:
                     ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
-                elif test_name == "A280_48-72hr" and "2Trig" not in construct:
+                elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" not in construct:
                     ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
-                elif test_name == "A280_48-72hr" and "2Trig" in construct:
+                elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
                     ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
                 elif "2Trig" in construct:
                     ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
@@ -800,7 +840,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 legend_groups[f"{group_prefix}_ci"].append(ci_handle)
                 legend_groups[f"{group_prefix}_main"].append(scatter_handle)
                 if plot_singly and construct == "2Trig-10xHis-1TEL-SR-DARPin":
-                    if test_name == "A280_48-72hr":
+                    if test_name in ["A280_48hr", "A280_72hr"]:
                         inflection_color = "indigo"
                     else:
                         inflection_color = "red"
@@ -868,7 +908,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
 
         if not plot_singly:
             is_gravity_comparison = (len(protein_constructs) == 2 and len(tests) == 1 and any("Gravity" in construct for construct in protein_constructs))
-            is_time_comparison = (len(protein_constructs) == 1 and "A280_1hr" in tests and "A280_48-72hr" in tests)
+            is_time_comparison = (len(protein_constructs) == 1 and "A280_1hr" in tests and any(t in tests for t in ["A280_48hr", "A280_72hr"]))
             if is_time_comparison:
                 if "2Trig" in protein_constructs[0]:
                     if len(inflection_points_2trig_1hr) >= 1:
@@ -886,11 +926,11 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         mean_48hr = np.mean(inflection_points_2trig_48hr)
                         inflection_x_48hr = display_inflection_x(mean_48hr)
                         inflection_48hr = plt.axvline(inflection_x_48hr, color="indigo", linestyle="--")
-                        inflection_handles_and_labels[inflection_48hr] = format_inflection_label("48 Hour Inflection",mean_48hr)
+                        inflection_handles_and_labels[inflection_48hr] = format_inflection_label(f"{time_label_from_test(test_name)} Inflection",mean_48hr)
                         legend_groups["group2_inflection"].append(inflection_48hr)
                     elif protein_constructs[0] == "2Trig-10xHis-1TEL-SR-DARPin":
                         inflection_48hr = plt.axvline(4.5, color="purple", linestyle="--")
-                        inflection_handles_and_labels[inflection_48hr] = "48 Hour Inflection: pH < 4.5"
+                        inflection_handles_and_labels[inflection_48hr] = f"{time_label_from_test(test_name)} Inflection: pH < 4.5"
                         legend_groups["group2_inflection"].append(inflection_48hr)
 
                 elif "Gravity" in protein_constructs[0]:
@@ -905,7 +945,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         mean_48hr = np.mean(inflection_points_gravity_48hr)
                         inflection_x_48hr = display_inflection_x(mean_48hr)
                         inflection_48hr = plt.axvline(inflection_x_48hr, color="brown", linestyle="--")
-                        inflection_handles_and_labels[inflection_48hr] = format_inflection_label("48 Hour Inflection", mean_48hr)
+                        inflection_handles_and_labels[inflection_48hr] = format_inflection_label(f"{time_label_from_test(test_name)} Inflection", mean_48hr)
                         legend_groups["group2_inflection"].append(inflection_48hr)   
                 
                 else:
@@ -920,7 +960,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         mean_48hr = np.mean(inflection_points_1trig_48hr)
                         inflection_x_48hr = display_inflection_x(mean_48hr)
                         inflection_48hr = plt.axvline(inflection_x_48hr, color="purple", linestyle="--")
-                        inflection_handles_and_labels[inflection_48hr] = format_inflection_label("48 Hour Inflection",mean_48hr)
+                        inflection_handles_and_labels[inflection_48hr] = format_inflection_label(f"{time_label_from_test(test_name)} Inflection",mean_48hr)
                         legend_groups["group2_inflection"].append(inflection_48hr)
             elif is_gravity_comparison:
                 if "A400" in tests:
@@ -932,14 +972,14 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     gravity_color = "green"
                     gravity_label = "Gravity Inflection"
 
-                elif "A280_48-72hr" in tests:
+                elif any(t in tests for t in ["A280_48hr", "A280_72hr"]):
                     nongravity_points = inflection_points_1trig_48hr
                     nongravity_color = "purple"
-                    nongravity_label = "ÄKTA 48 Hour Inflection"
+                    nongravity_label = f"ÄKTA {time_label_from_test(test_name)} Inflection"
 
                     gravity_points = inflection_points_gravity_48hr
                     gravity_color = "brown"
-                    gravity_label = "Gravity 48 Hour Inflection"
+                    gravity_label = f"Gravity {time_label_from_test(test_name)} Inflection"
 
                 elif "A280_1hr" in tests:
                     nongravity_points = inflection_points_1trig_1hr
