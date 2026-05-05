@@ -855,8 +855,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     y_axis = "Normalized Absorbance Units"
                     assay = "Turbidity"
                 else:
-                    y_axis = "Precipitation Fractional Loss"
-                    assay = "Solubility"
+                    y_axis = "Normalized Sedimentation"
+                    assay = "Sedimentation"
                 replicate_dates = sorted({d
                     for pH in constructs_by_pH_by_date[construct_key]
                     for d in constructs_by_pH_by_date[construct_key][pH]["dates"]})
@@ -1041,8 +1041,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 y_axis = 'Normalized Absorbance Units'
                 assay = 'Turbidity'
             else:
-                y_axis = "Precipitation Fractional Loss"
-                assay = 'Solubility'
+                y_axis = "Normalized Sedimentation"
+                assay = 'Sedimentation'
             if len(protein_constructs) == 1:
                 protein_title = format_protein_title(protein_constructs[0])
                 plt.title(f"{protein_title}, {assay}", fontsize = 14)
@@ -1086,18 +1086,18 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             plt.close()
 
 if __name__ == '__main__':
-    for protein_construct in protein_dict:
-        if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
-            # Single-trigger A400: one plot per replicate date
-            for date in get_dates_for_construct(f'{protein_construct}', 'A400'):
-                statisticize([(f'{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
+    #for protein_construct in protein_dict:
+     #   if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
+      #      # Single-trigger A400: one plot per replicate date
+       #     for date in get_dates_for_construct(f'{protein_construct}', 'A400'):
+        #        statisticize([(f'{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
             # Double-trigger A400: one plot per replicate date
-            for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A400'):
-               statisticize([(f'2Trig-{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
-            for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A400'):
-                statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A400')],plot=True, plot_singly=True, specific_date=date)
+         #   for date in get_dates_for_construct(f'2Trig-{protein_construct}', 'A400'):
+          #     statisticize([(f'2Trig-{protein_construct}', 'A400')],plot=True,plot_singly=True,specific_date=date)
+           # for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A400'):
+            #    statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A400')],plot=True, plot_singly=True, specific_date=date)
              #Single vs. Double-trigger A400
-            statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
+            #statisticize([(f'{protein_construct}','A400'),(f'2Trig-{protein_construct}','A400')],plot=True)
 
     for protein_construct in protein_dict:
         if '2Trig' not in protein_construct and 'Gravity' not in protein_construct:
@@ -1131,15 +1131,15 @@ if __name__ == '__main__':
             statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True,tailored=True)
 
     # Plot the individual Gravity replicates for A400, A280 1 HR, and A280 48-72 HR
-    for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A400'):
-        statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A400')], plot=True, plot_singly=True, specific_date=date)
+    #for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A400'):
+     #   statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A400')], plot=True, plot_singly=True, specific_date=date)
     for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A280_1hr'):
         statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A280_1hr')], plot=True, plot_singly=True, specific_date=date)
     for date in get_dates_for_construct('10xHis-1TEL-TV-vWA (Gravity)', 'A280_48-72hr'):
         statisticize([('10xHis-1TEL-TV-vWA (Gravity)', 'A280_48-72hr')], plot=True, plot_singly=True, specific_date=date)
     # Single trigger TV-vWA A400, A280 1 HR, A280 48-72 HR, A280 1 HR vs 48-72 HR
     statisticize([('10xHis-1TEL-TV-vWA','A280_48-72hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_48-72hr')],plot=True)
-    statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
+    #statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
     statisticize([('10xHis-1TEL-TV-vWA','A280_1hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_1hr')],plot=True)
     # Single-Trigger vs Double-Trigger 1TEL-PA-TNK1.UBA 1 Hour vs. 48 Hour with both behaviors
     statisticize([(f'1TEL-PA-TNK1.UBA','A280_1hr'), (f'2Trig-1TEL-PA-TNK1.UBA','A280_1hr')],plot=True,tailored=True)
