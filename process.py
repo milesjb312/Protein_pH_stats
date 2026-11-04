@@ -848,7 +848,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     for pH in constructs_by_pH_by_date[construct_key]
                     for d in constructs_by_pH_by_date[construct_key][pH]["dates"]})
                 date_text = replicate_dates[0] if len(replicate_dates) == 1 else ", ".join(replicate_dates)
-                plt.title(f"{format_chart_title(construct,len(protein_constructs))}, {assay}\nReplicate Date: {date_text}",fontsize=14)
+                plt.title(f"{format_chart_title(construct,len(protein_constructs))}\nReplicate Date: {date_text}",fontsize=14)
                 plt.ylabel(y_axis)
                 plt.xlabel("pH")
                 if any_starred_points:
@@ -1032,14 +1032,14 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 assay = 'Sedimentation'
             if len(protein_constructs) == 1:
                 protein_title = format_chart_title(protein_constructs[0],len(protein_constructs))
-                plt.title(f"{protein_title}, {assay}", fontsize = 14)
+                plt.title(f"{protein_title}", fontsize = 14)
                 plt.ylabel(y_axis)
                 plt.xlabel("pH")
             else:
                 if (len(protein_constructs) == 2 or is_alone_knockout_comparison) and len(tests) == 1:
                     # Use the first construct as the base protein title
                     protein_title = format_chart_title(protein_constructs[0],len(protein_constructs))
-                    plt.title(f"{protein_title}, {assay}", fontsize = 14)
+                    plt.title(f"{protein_title}", fontsize = 14)
                     plt.ylabel(y_axis)
                     plt.xlabel("pH")
             # add asterisk legend entry LAST so it appears on bottom row
