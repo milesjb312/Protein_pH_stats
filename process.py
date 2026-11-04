@@ -163,12 +163,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
 
 # This helper function creates the legend label for the inflection point line. 
 def format_inflection_label(prefix, inflection_value):
-    if inflection_value <= 4.0:
-        return f"{prefix}: pH < 4.5"
-    elif inflection_value >= 9.0:
-        return f"{prefix}: pH > 8.5"
-    else:
-        return f"{prefix}: pH = {inflection_value:.1f}"
+    return f"{prefix}: pH = {inflection_value:.1f}"
 
 # This helper function determines if the vWA of PA-UBA 1 Hour solubility data need to be labeld as behavior 1 (ideal) or behavior 2 (non-ideal).
 def behavior_label_from_behavior_id(behavior_id):
@@ -353,9 +348,9 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             pH_single_omitted = constructs_by_pH_by_date[construct][pH]["dates_single_omitted"]
             pH_time_omitted = constructs_by_pH_by_date[construct][pH]["dates_time_omitted"]
 
-            # These lists are populated with data that needs to be displayed on the plot and/or used for curve fitting (all points are displayed on the plot).
-            all_drops_for_display = []
-            all_drops_for_fit = []
+            # Each date contributes one observation, regardless of how many drops were measured.
+            date_means_for_display = []
+            date_means_for_fit = []
 
             # This for loop goes through each pH for one construct and "attaches" the labels we use to determine if a measurement should be omitted from curve fitting
             # and if it should have an asterisk next to it in the plot signifying that it was omitted from curve fitting.
@@ -383,8 +378,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     # Include every displayed drop in the IQR calculation.
                     all_drops_for_display.extend(np.array(display_drops, dtype=float))
                 if len(fit_drops) > 0:
-                    # Pool drops from all replicates into a list that will be used for curve fitting (unless you're plotting a single replicate).
-                    all_drops_for_fit.extend(np.array(fit_drops, dtype=float))
+                    date_means_for_fit.append(np.mean(fit_drops))
 
             # Collect all displayed drops for the IQR band and eligible drops for curve fitting.
             if len(all_drops_for_display) > 0:
@@ -393,9 +387,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 constructs_by_pH_by_date[construct][pH]["IQR_upper_display"] = q3_display
 
             # Calculate the mean of the data we use to do the curve fitting.
-            if len(all_drops_for_fit) > 0:
-                mean_fit = np.mean(all_drops_for_fit)
-                constructs_by_pH_by_date[construct][pH]["mean"] = mean_fit
+            if date_means_for_fit:
+                constructs_by_pH_by_date[construct][pH]["mean"] = np.mean(date_means_for_fit)
     
     # This function returns the 4PL equation that we use to plot the 4PL curve onto the plot. We get the parameters from the "curve_fit" command below.
     def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
@@ -545,13 +538,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 # The following if and else statements compute statistics for datasets with unique behaviors and add those data to empty lists. We also add any other data
                 # to other lists.
                 if is_special_behavior_plot:
-                    subgroup_measurements = {}
+                    subgroup_measurements_by_date = {}
                     for date, measurements in pH_entry["dates"].items():
                         behavior_id = pH_entry["dates_behavior_id"].get(date, "").strip()
                         if behavior_id == "":
                             continue
-                        if behavior_id not in subgroup_measurements:
-                            subgroup_measurements[behavior_id] = []
+                        if behavior_id not in subgroup_measurements_by_date:
+                            subgroup_measurements_by_date[behavior_id] = {}
                         star_flags = pH_entry["dates_starred"][date]
                         single_omit_flags = pH_entry["dates_single_omitted"][date]
                         time_omit_flags = pH_entry["dates_time_omitted"][date]
@@ -756,7 +749,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         inflection_color = "red"
                     else:
                         inflection_color = "blue"
-                    inflection_handle = plt.axvline(inflection_x,color=inflection_color,linestyle="--")
+                    inflection_handle = plt.axvline(inflection_value,color=inflection_color,linestyle="--")
                     handles_and_labels[inflection_handle] = format_inflection_label("Inflection Point",inflection_value)
 
             except Exception as e:
@@ -817,17 +810,6 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
                 legend_groups[f"{group_prefix}_iqr"].append(iqr_handle)
                 legend_groups[f"{group_prefix}_main"].append(scatter_handle)
-                if plot_singly and construct == "2Trig-10xHis-1TEL-SR-DARPin":
-                    if test_name in ["A280_48hr", "A280_72hr"]:
-                        inflection_color = "indigo"
-                    else:
-                        inflection_color = "red"
-                    inflection_handle = plt.axvline(4.5, color=inflection_color, linestyle="--")
-                    handles_and_labels[inflection_handle] = "Inflection Point: pH < 4.5"
-                if (plot_singly and construct == "10xHis-1TEL-TV-vWA" and test_name == "A400" and specific_date == "1/28/2026"):
-                    inflection_handle = plt.axvline(4.5, color="blue", linestyle="--")
-                    handles_and_labels[inflection_handle] = "Inflection Point: pH < 4.5"
-
             if plot_singly:
                 if test_name == "A400":
                     y_axis = "Normalized Absorbance Units"
@@ -908,20 +890,12 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         inflection_1hr = plt.axvline(inflection_x_1hr, color="darkorange", linestyle="--")
                         inflection_handles_and_labels[inflection_1hr] = format_inflection_label("1 Hour Inflection",mean_1hr)
                         legend_groups["group1_inflection"].append(inflection_1hr)
-                    elif protein_constructs[0] == "2Trig-10xHis-1TEL-SR-DARPin":
-                        inflection_1hr = plt.axvline(4.5, color="darkorange", linestyle="--")
-                        inflection_handles_and_labels[inflection_1hr] = "1 Hour Inflection: pH < 4.5"
-                        legend_groups["group1_inflection"].append(inflection_1hr)
 
                     if len(inflection_points_2trig_48hr) >= 1:
                         mean_48hr = np.mean(inflection_points_2trig_48hr)
                         inflection_x_48hr = min(max(mean_48hr, 4.5), 8.5)
                         inflection_48hr = plt.axvline(inflection_x_48hr, color="indigo", linestyle="--")
                         inflection_handles_and_labels[inflection_48hr] = format_inflection_label(f"{time_label_from_test(test_name)} Inflection",mean_48hr)
-                        legend_groups["group2_inflection"].append(inflection_48hr)
-                    elif protein_constructs[0] == "2Trig-10xHis-1TEL-SR-DARPin":
-                        inflection_48hr = plt.axvline(4.5, color="purple", linestyle="--")
-                        inflection_handles_and_labels[inflection_48hr] = f"{time_label_from_test(test_name)} Inflection: pH < 4.5"
                         legend_groups["group2_inflection"].append(inflection_48hr)
 
                 elif "Gravity" in protein_constructs[0]:
