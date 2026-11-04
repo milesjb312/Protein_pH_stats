@@ -340,7 +340,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
         for behavior_id in biological_n_by_construct_and_behavior[construct]:
             biological_n_by_construct_and_behavior[construct][behavior_id] = len(biological_n_by_construct_and_behavior[construct][behavior_id])
 
-    # Compute pointwise 95% confidence intervals from the biological replicate dates.
+    # Compute the IQR band across all drops for each pH and construct.
     for construct in constructs_by_pH_by_date:
         for pH in constructs_by_pH_by_date[construct]:
             pH_dates = constructs_by_pH_by_date[construct][pH]["dates"]
@@ -375,21 +375,16 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 display_drops = [item[0] for item in paired]
                 fit_drops = [item[0] for item in fit_paired]
                 if len(display_drops) > 0:
-                    date_means_for_display.append(np.mean(display_drops))
+                    # Include every displayed drop in the IQR calculation.
+                    all_drops_for_display.extend(np.array(display_drops, dtype=float))
                 if len(fit_drops) > 0:
                     date_means_for_fit.append(np.mean(fit_drops))
 
-            # Create variables that will be displayed on the plot and used for calculating the 95% confidence interval.
-            if date_means_for_display:
-                mean_display = np.mean(date_means_for_display)
-                constructs_by_pH_by_date[construct][pH]["mean_display"] = mean_display
-                if len(date_means_for_display) > 1:
-                    sd_display = np.std(date_means_for_display, ddof=1)
-                    se_display = sd_display / np.sqrt(len(date_means_for_display))
-                    t_display = t.ppf(0.975, df=len(date_means_for_display) - 1)
-                    error_display = se_display * t_display
-                    constructs_by_pH_by_date[construct][pH]["CI_lower_display"] = mean_display - error_display
-                    constructs_by_pH_by_date[construct][pH]["CI_upper_display"] = mean_display + error_display
+            # Collect all displayed drops for the IQR band and eligible drops for curve fitting.
+            if len(all_drops_for_display) > 0:
+                q1_display, q3_display = np.percentile(all_drops_for_display, [25, 75])
+                constructs_by_pH_by_date[construct][pH]["IQR_lower_display"] = q1_display
+                constructs_by_pH_by_date[construct][pH]["IQR_upper_display"] = q3_display
 
             # Calculate the mean of the data we use to do the curve fitting.
             if date_means_for_fit:
@@ -523,13 +518,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         if behavior_id == "":
                             continue
                         if behavior_id not in behavior_groups:
-                            behavior_groups[behavior_id] = {
-                                'pH_values': [],
-                                'means': [],
-                                'ci_pH_values': [],
-                                'ci_lower': [],
-                                'ci_upper': [],
-                            }
+                            behavior_groups[behavior_id] = {'pH_values': [],'means': [],'iqr_lower': [],'iqr_upper': []}
                 # Always keep raw data points for plotting.
                 for date, measurements in pH_entry["dates"].items():
                     star_flags = pH_entry["dates_starred"][date]
@@ -566,27 +555,19 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             paired = [item for item in paired if not item[2]]
                         if is_time_comparison:
                             paired = [item for item in paired if not item[3]]
-                        if paired:
-                            subgroup_measurements_by_date[behavior_id][date] = np.mean(
-                                [item[0] for item in paired])
-                    for behavior_id, date_means in subgroup_measurements_by_date.items():
-                        if not date_means:
+                        subgroup_measurements[behavior_id].extend(item[0] for item in paired)
+                    for behavior_id, vals in subgroup_measurements.items():
+                        if len(vals) == 0:
                             continue
-                        vals = np.array(list(date_means.values()), dtype=float)
                         mean_val = np.mean(vals)
+                        q1, q3 = np.percentile(vals, [25, 75])
                         behavior_groups[behavior_id]['pH_values'].append(float(pH))
                         behavior_groups[behavior_id]['means'].append(mean_val)
-                        if len(vals) > 1:
-                            sd_val = np.std(vals, ddof=1)
-                            se_val = sd_val / np.sqrt(len(vals))
-                            t_val = t.ppf(0.975, df=len(vals) - 1)
-                            err = se_val * t_val
-                            behavior_groups[behavior_id]['ci_pH_values'].append(float(pH))
-                            behavior_groups[behavior_id]['ci_lower'].append(mean_val - err)
-                            behavior_groups[behavior_id]['ci_upper'].append(mean_val + err)
+                        behavior_groups[behavior_id]['iqr_lower'].append(q1)
+                        behavior_groups[behavior_id]['iqr_upper'].append(q3)
                 else:
-                    # Add CI-band values whenever display stats exist
-                    if "CI_lower_display" in pH_entry:
+                    # Add IQR-band values whenever display statistics exist.
+                    if "IQR_lower_display" in pH_entry:
                         pH_values_display.append(float(pH))
                         iqr_lower_bounds.append(pH_entry["IQR_lower_display"])
                         iqr_upper_bounds.append(pH_entry["IQR_upper_display"])
@@ -609,9 +590,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             continue
                         group_pH = group_data['pH_values']
                         group_means = group_data['means']
-                        group_ci_pH = group_data['ci_pH_values']
-                        group_ci_lower = group_data['ci_lower']
-                        group_ci_upper = group_data['ci_upper']
+                        group_iqr_lower = group_data['iqr_lower']
+                        group_iqr_upper = group_data['iqr_upper']
                         pH_linspace = np.linspace(min(group_pH), max(group_pH), 400)
                         initial_guesses = [max(group_means), -4, 5.5, min(group_means)]
                         # This is where we fit a curve to the data using scipy's curve_fit function. Scipy uses non-linear least squares to fit a function, f, to data. 
@@ -621,13 +601,11 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             continue
                         curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=behavior_colors[behavior_id],linestyle="-")
                         line_handle = curve_handle_list[0]
-                        if group_ci_pH:
-                            ci_handle = plt.fill_between(
-                                group_ci_pH, group_ci_lower, group_ci_upper,
-                                color=behavior_colors[behavior_id], alpha=0.12)
-                            handles_and_labels[ci_handle] = f"{behavior_label_from_behavior_id(behavior_id)} 95% CI"
-                            legend_groups["group1_ci"].append(ci_handle)
-                        inflection_handle = plt.axvline(inflection_value,color=behavior_colors[behavior_id],linestyle=":")
+                        iqr_handle = plt.fill_between(group_pH,group_iqr_lower,group_iqr_upper,color=behavior_colors[behavior_id],alpha=0.12)
+                        handles_and_labels[iqr_handle] = f"{behavior_label_from_behavior_id(behavior_id)} IQR"
+                        legend_groups["group1_iqr"].append(iqr_handle)
+                        inflection_x = min(max(inflection_value, 4.5), 8.5)
+                        inflection_handle = plt.axvline(inflection_x,color=behavior_colors[behavior_id],linestyle=":")
                         inflection_handles_and_labels[inflection_handle] = (
                             f"{behavior_label_from_behavior_id(behavior_id)} Inflection: "
                             f"{format_inflection_label('', inflection_value).replace(': ', '').strip()}")
@@ -662,41 +640,40 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             inflection_points_1trig_1hr.append(inflection_value)
                     curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=color_map[construct_key])
                     line_handle = curve_handle_list[0]
-                    if pH_values_display:
-                        if "Gravity" in construct and test_name in ["A280_48hr", "A280_72hr"]:
-                            ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='brown', alpha=0.20)
-                            ci_label = f"Gravity {time_label_from_test(test_name)} 95% CI"
-                        elif "Gravity" in construct and test_name == 'A280_1hr':
-                            ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
-                            ci_label = "Gravity 1 Hour 95% CI"
-                        elif "Gravity" in construct:
-                            ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
-                            ci_label = "Gravity 95% CI"
-                        elif "Knockout" in construct:
-                            ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color=color_map[construct_key], alpha=0.20)
-                            time_label = time_label_from_test(test_name)
-                            ci_label = f"Knockout {time_label + ' ' if time_label else ''}95% CI"
-                        elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" not in construct:
-                            ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
-                            ci_label = f"1Trig {time_label_from_test(test_name)} 95% CI"
-                        elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
-                            ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
-                            ci_label = f"2Trig {time_label_from_test(test_name)} 95% CI"
-                        elif "2Trig" in construct and test_name == 'A280_1hr':
-                            ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
-                            ci_label = "2Trig 1 Hour 95% CI"
-                        elif "2Trig" in construct:
-                            ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
-                            ci_label = "2Trig 95% CI"
-                        elif test_name == 'A280_1hr' and "2Trig" not in construct:
-                            ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
-                            ci_label = "1Trig 1 Hour 95% CI"
-                        else:
-                            ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
-                            ci_label = "1Trig 95% CI"
-                        handles_and_labels[ci_handle] = ci_label
-                        group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
-                        legend_groups[f"{group_prefix}_ci"].append(ci_handle)
+                    if "Gravity" in construct and test_name in ["A280_48hr", "A280_72hr"]:
+                        iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='brown', alpha=0.20)
+                        iqr_label = f"Gravity {time_label_from_test(test_name)} IQR"
+                    elif "Gravity" in construct and test_name == 'A280_1hr':
+                        iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='lime', alpha=0.20)
+                        iqr_label = "Gravity 1 Hour IQR"
+                    elif "Gravity" in construct:
+                        iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='lime', alpha=0.20)
+                        iqr_label = "Gravity IQR"
+                    elif "Knockout" in construct:
+                        iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color=color_map[construct_key], alpha=0.20)
+                        time_label = time_label_from_test(test_name)
+                        iqr_label = f"Knockout {time_label + ' ' if time_label else ''}IQR"
+                    elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" not in construct:
+                        iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='pink', alpha=0.20)
+                        iqr_label = f"1Trig {time_label_from_test(test_name)} IQR"
+                    elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
+                        iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='mediumpurple', alpha=0.20)
+                        iqr_label = f"2Trig {time_label_from_test(test_name)} IQR"
+                    elif "2Trig" in construct and test_name == 'A280_1hr':
+                        iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='tomato', alpha=0.20)
+                        iqr_label = "2Trig 1 Hour IQR"
+                    elif "2Trig" in construct:
+                        iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='tomato', alpha=0.20)
+                        iqr_label = "2Trig IQR"
+                    elif test_name == 'A280_1hr' and "2Trig" not in construct:
+                        iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='cyan', alpha=0.20)
+                        iqr_label = "1Trig 1 Hour IQR"
+                    else:
+                        iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='cyan', alpha=0.20)
+                        iqr_label = "1Trig IQR"
+                    handles_and_labels[iqr_handle] = iqr_label
+                    group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
+                    legend_groups[f"{group_prefix}_iqr"].append(iqr_handle)
 
                 # plot raw scatter points
                 jitter_strength = 0.08
@@ -757,6 +734,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     legend_groups[f"{group_prefix}_main"].append(pair_handle)
 
                 if plot_singly:
+                    inflection_x = min(max(inflection_value, 4.5), 8.5)
                     if "Gravity" in construct and test_name in ["A280_48hr", "A280_72hr"]:
                         inflection_color = 'brown'
                     elif "Gravity" in construct:
@@ -794,20 +772,18 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             construct_starred.append(is_starred)
                             construct_single_omitted.append(is_single_omitted)
                             construct_time_omitted.append(is_time_omitted)
-                ci_handle = None
-                if pH_values_display:
-                    if "Gravity" in construct:
-                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='lime', alpha=0.20)
-                    elif "Knockout" in construct:
-                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color=color_map[construct_key], alpha=0.20)
-                    elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" not in construct:
-                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
-                    elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
-                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
-                    elif "2Trig" in construct:
-                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
-                    else:
-                        ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
+                if "Gravity" in construct:
+                    iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='lime', alpha=0.20)
+                elif "Knockout" in construct:
+                    iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color=color_map[construct_key], alpha=0.20)
+                elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" not in construct:
+                    iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='pink', alpha=0.20)
+                elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
+                    iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='mediumpurple', alpha=0.20)
+                elif "2Trig" in construct:
+                    iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='tomato', alpha=0.20)
+                else:
+                    iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='cyan', alpha=0.20)
                 jitter_strength = 0.08
                 jittered_pHs = np.array(construct_pHs) + np.random.uniform(-jitter_strength, jitter_strength, len(construct_pHs))
                 if "Knockout" in construct:
@@ -830,11 +806,9 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     combined_any_omitted_points = True
                 legend_label = format_legend_label(construct,test_name,protein_constructs,tests,biological_n_by_construct[construct_key])
                 handles_and_labels[scatter_handle] = legend_label
-                if ci_handle is not None:
-                    handles_and_labels[ci_handle] = f"{legend_label.split(' (n')[0]} 95% CI"
+                handles_and_labels[iqr_handle] = f"{legend_label.split(' (n')[0]} IQR"
                 group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
-                if ci_handle is not None:
-                    legend_groups[f"{group_prefix}_ci"].append(ci_handle)
+                legend_groups[f"{group_prefix}_iqr"].append(iqr_handle)
                 legend_groups[f"{group_prefix}_main"].append(scatter_handle)
             if plot_singly:
                 if test_name == "A400":
@@ -887,7 +861,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
                 plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
                 safe_date_text = date_text.replace("/", "-").replace(", ", "_").replace(" ", "_")
-                plt.savefig(f"{BASE_DIR}/figures_with_CIs/{construct.replace('/', '_')}_{test_name}_{safe_date_text}_single.png",dpi=300,bbox_inches="tight")
+                plt.savefig(f"{BASE_DIR}/figures_without_legends/{construct.replace('/', '_')}_{test_name}_{safe_date_text}_single.png",dpi=300,bbox_inches="tight")
                 plt.show()
                 plt.close()
                 handles_and_labels = {}
@@ -905,46 +879,52 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         if inflection_points:
                             mean_inflection = np.mean(inflection_points)
                             inflection_handle = plt.axvline(
-                                mean_inflection, color=color, linestyle="--")
+                                min(max(mean_inflection, 4.5), 8.5), color=color, linestyle="--")
                             inflection_handles_and_labels[inflection_handle] = format_inflection_label(
                                 label, mean_inflection)
                             legend_groups["group1_inflection" if "1 Hour" in label else "group2_inflection"].append(inflection_handle)
                 elif "2Trig" in protein_constructs[0]:
                     if len(inflection_points_2trig_1hr) >= 1:
                         mean_1hr = np.mean(inflection_points_2trig_1hr)
-                        inflection_1hr = plt.axvline(mean_1hr, color="darkorange", linestyle="--")
+                        inflection_x_1hr = min(max(mean_1hr, 4.5), 8.5)
+                        inflection_1hr = plt.axvline(inflection_x_1hr, color="darkorange", linestyle="--")
                         inflection_handles_and_labels[inflection_1hr] = format_inflection_label("1 Hour Inflection",mean_1hr)
                         legend_groups["group1_inflection"].append(inflection_1hr)
 
                     if len(inflection_points_2trig_48hr) >= 1:
                         mean_48hr = np.mean(inflection_points_2trig_48hr)
-                        inflection_48hr = plt.axvline(mean_48hr, color="indigo", linestyle="--")
+                        inflection_x_48hr = min(max(mean_48hr, 4.5), 8.5)
+                        inflection_48hr = plt.axvline(inflection_x_48hr, color="indigo", linestyle="--")
                         inflection_handles_and_labels[inflection_48hr] = format_inflection_label(f"{time_label_from_test(test_name)} Inflection",mean_48hr)
                         legend_groups["group2_inflection"].append(inflection_48hr)
 
                 elif "Gravity" in protein_constructs[0]:
                     if len(inflection_points_gravity_1hr) >= 1:
                         mean_1hr = np.mean(inflection_points_gravity_1hr)
-                        inflection_1hr = plt.axvline(mean_1hr, color="green", linestyle="--")
+                        inflection_x_1hr = min(max(mean_1hr, 4.5), 8.5)
+                        inflection_1hr = plt.axvline(inflection_x_1hr, color="green", linestyle="--")
                         inflection_handles_and_labels[inflection_1hr] = format_inflection_label("1 Hour Inflection", mean_1hr)
                         legend_groups["group1_inflection"].append(inflection_1hr)
 
                     if len(inflection_points_gravity_48hr) >= 1:
                         mean_48hr = np.mean(inflection_points_gravity_48hr)
-                        inflection_48hr = plt.axvline(mean_48hr, color="brown", linestyle="--")
+                        inflection_x_48hr = min(max(mean_48hr, 4.5), 8.5)
+                        inflection_48hr = plt.axvline(inflection_x_48hr, color="brown", linestyle="--")
                         inflection_handles_and_labels[inflection_48hr] = format_inflection_label(f"{time_label_from_test(test_name)} Inflection", mean_48hr)
                         legend_groups["group2_inflection"].append(inflection_48hr)   
                 
                 else:
                     if len(inflection_points_1trig_1hr) >= 1:
                         mean_1hr = np.mean(inflection_points_1trig_1hr)
-                        inflection_1hr = plt.axvline(mean_1hr, color="blue", linestyle="--")
+                        inflection_x_1hr = min(max(mean_1hr, 4.5), 8.5)
+                        inflection_1hr = plt.axvline(inflection_x_1hr, color="blue", linestyle="--")
                         inflection_handles_and_labels[inflection_1hr] = format_inflection_label("1 Hour Inflection",mean_1hr)
                         legend_groups["group1_inflection"].append(inflection_1hr)
 
                     if len(inflection_points_1trig_48hr) >= 1:
                         mean_48hr = np.mean(inflection_points_1trig_48hr)
-                        inflection_48hr = plt.axvline(mean_48hr, color="purple", linestyle="--")
+                        inflection_x_48hr = min(max(mean_48hr, 4.5), 8.5)
+                        inflection_48hr = plt.axvline(inflection_x_48hr, color="purple", linestyle="--")
                         inflection_handles_and_labels[inflection_48hr] = format_inflection_label(f"{time_label_from_test(test_name)} Inflection",mean_48hr)
                         legend_groups["group2_inflection"].append(inflection_48hr)
             elif is_gravity_comparison:
@@ -977,13 +957,15 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
 
                 if len(nongravity_points) >= 1:
                     mean_ng = np.mean(nongravity_points)
-                    inflection_ng = plt.axvline(mean_ng, color=nongravity_color, linestyle="--")
+                    inflection_x_ng = min(max(mean_ng, 4.5), 8.5)
+                    inflection_ng = plt.axvline(inflection_x_ng, color=nongravity_color, linestyle="--")
                     inflection_handles_and_labels[inflection_ng] = format_inflection_label(nongravity_label, mean_ng)
                     legend_groups["group1_inflection"].append(inflection_ng)
 
                 if len(gravity_points) >= 1:
                     mean_g = np.mean(gravity_points)
-                    inflection_g = plt.axvline(mean_g, color=gravity_color, linestyle="--")
+                    inflection_x_g = min(max(mean_g, 4.5), 8.5)
+                    inflection_g = plt.axvline(inflection_x_g, color=gravity_color, linestyle="--")
                     inflection_handles_and_labels[inflection_g] = format_inflection_label(gravity_label, mean_g)
                     legend_groups["group2_inflection"].append(inflection_g)
             else:
@@ -1000,14 +982,25 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     color_2trig = "red"
                 if len(inflection_points_1trig) >= 1:
                     mean_1trig = np.mean(inflection_points_1trig)
-                    inflection_1 = plt.axvline(mean_1trig, color=color_1trig, linestyle="--")
+                    inflection_x_1 = min(max(mean_1trig, 4.5), 8.5)
+                    inflection_1 = plt.axvline(inflection_x_1, color=color_1trig, linestyle="--")
                     inflection_handles_and_labels[inflection_1] = format_inflection_label("1Trig Inflection",mean_1trig)
                     legend_groups["group1_inflection"].append(inflection_1)
                 if len(inflection_points_2trig) >= 1:
                     mean_2trig = np.mean(inflection_points_2trig)
-                    inflection_2 = plt.axvline(mean_2trig, color=color_2trig, linestyle="--")
+                    inflection_x_2 = min(max(mean_2trig, 4.5), 8.5)
+                    inflection_2 = plt.axvline(inflection_x_2, color=color_2trig, linestyle="--")
                     inflection_handles_and_labels[inflection_2] = format_inflection_label("2Trig Inflection",mean_2trig)
                     legend_groups["group2_inflection"].append(inflection_2)
+                else:
+                    is_darpin_comparison = (
+                            len(protein_constructs) == 2
+                            and any(c == "10xHis-1TEL-SR-DARPin" for c in protein_constructs)
+                            and any(c == "2Trig-10xHis-1TEL-SR-DARPin" for c in protein_constructs))
+                    if is_darpin_comparison:
+                        inflection_2 = plt.axvline(4.50, color=color_2trig, linestyle="--")
+                        inflection_handles_and_labels[inflection_2] = "2Trig Inflection: pH < 4.5"
+                        legend_groups["group2_inflection"].append(inflection_2)
                 knockout_inflection_points = (
                     inflection_points_knockout_48hr
                     if any(test in tests for test in ["A280_48hr", "A280_72hr"])
@@ -1016,7 +1009,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 if knockout_inflection_points:
                     mean_knockout = np.mean(knockout_inflection_points)
                     knockout_inflection = plt.axvline(
-                        mean_knockout, color="forestgreen", linestyle="--")
+                        min(max(mean_knockout, 4.5), 8.5), color="forestgreen", linestyle="--")
                     inflection_label = "Knockout Inflection"
                     if test_name in ["A280_1hr", "A280_48hr", "A280_72hr"]:
                         inflection_label = f"Knockout {time_label_from_test(test_name)} Inflection"
@@ -1062,7 +1055,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             plt.legend(handles, labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
             safe_constructs = "_vs_".join([p.replace("/", "_") for p in protein_constructs])
             safe_tests = "_vs_".join(tests)
-            plt.savefig(f"{BASE_DIR}/figures_with_CIs/{safe_constructs}__{safe_tests}.png", dpi=300, bbox_inches="tight")
+            plt.savefig(f"{BASE_DIR}/figures_without_legends/{safe_constructs}__{safe_tests}.png", dpi=300, bbox_inches="tight")
             plt.show()
             plt.close()
 
