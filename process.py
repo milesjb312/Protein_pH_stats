@@ -282,7 +282,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         value = (theoretical_max_concentration - numeric_replicate) / theoretical_max_concentration
                     # Normalized Absorbance (turbidity plots)
                     else:
-                        value = numeric_replicate * (5/concentration)
+                        value = numeric_replicate/theoretical_max_concentration
                     data['data'].append(value)
                     data['is_starred'].append(is_starred)
                     data['is_single_omitted'].append(is_single_omitted)
