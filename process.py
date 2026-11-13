@@ -259,8 +259,10 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     behavior_id = protein_dict[protein_construct][bio_rep].get('Behavior ID', '').strip()
                     data['behavior_id'].append(behavior_id)
                     concentration = float(bio_rep.split("_")[1])
-                    theoretical_max_concentration = concentration/5
-
+                    if 'Knockout' in protein_construct and date == '7/17/2026':
+                        theoretical_max_concentration=concentration/3.281
+                    else: 
+                        theoretical_max_concentration = concentration/5
                     # The "if isinstance" and it's associated "else" statement determines whether this data point needs to be omitted from the curve fitting. If it doesn't,
                     # then return False statements for certain labels. If it does need to be omitted, we return True statements that stick with the data point throughout
                     # the rest of the function. It also removes the symbol (*, ^, ~) used to signal that that data point needs to be omitted from curve fitting.
