@@ -84,7 +84,7 @@ def format_chart_title(construct_name: str,multiplicity: int) -> str:
     elif "PA" in parts:
         linker = "PA"
     elif "SR" in parts:
-        linker = "[sr]"
+        linker = "sr"
     elif "TV" in parts:
         linker = "TV"
     # 4) target protein
@@ -131,7 +131,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
         elif "Knockout" in construct:
             base_label = "Knockout"
         else:
-            base_label = "2Trig" if is_2trig else "1Trig"
+            base_label = "dt" if is_2trig else "st"
         if is_solubility:
             label = f"{base_label} {time_label_from_test(test_name)}"
         else:
@@ -143,7 +143,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
         elif is_gravity:
             trig_label = "Gravity"
         else:
-            trig_label = "2Trig" if is_2trig else "1Trig"
+            trig_label = "dt" if is_2trig else "st"
         label = f"{trig_label} {time_label_from_test(test_name)}"
     # Case 3: one replicate / one construct / one test
     elif len(protein_constructs) == 1 and len(tests) == 1:
@@ -152,7 +152,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
         elif is_gravity:
             base_label = "Gravity"
         else:
-            base_label = "2Trig" if is_2trig else "1Trig"
+            base_label = "dt" if is_2trig else "st"
         if is_solubility:
             label = f"{base_label} {time_label_from_test(test_name)}"
         else:
@@ -619,7 +619,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         iqr_handle = plt.fill_between(group_pH,group_iqr_lower,group_iqr_upper,color=behavior_iqr_colors[behavior_id],alpha=0.12)
                         handles_and_labels[iqr_handle] = f"{behavior_label_from_behavior_id(behavior_id)} IQR"
                         legend_groups["group1_iqr"].append(iqr_handle)
-                        inflection_handle = plt.axvline(inflection_value,color=behavior_colors[behavior_id],linestyle=":")
+                        inflection_handle = plt.axvline(inflection_value,color=behavior_colors[behavior_id],linestyle="--")
                         inflection_handles_and_labels[inflection_handle] = (
                             f"{behavior_label_from_behavior_id(behavior_id)} Inflection: "
                             f"{format_inflection_label('', inflection_value).replace(': ', '').strip()}")
@@ -676,22 +676,22 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         iqr_label = f"Knockout {time_label + ' ' if time_label else ''}IQR"
                     elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" not in construct:
                         iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='pink', alpha=0.20)
-                        iqr_label = f"1Trig {time_label_from_test(test_name)} IQR"
+                        iqr_label = f"st {time_label_from_test(test_name)} IQR"
                     elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
                         iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='mediumpurple', alpha=0.20)
-                        iqr_label = f"2Trig {time_label_from_test(test_name)} IQR"
+                        iqr_label = f"dt {time_label_from_test(test_name)} IQR"
                     elif "2Trig" in construct and test_name == 'A280_1hr':
                         iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='tomato', alpha=0.20)
-                        iqr_label = "2Trig 1 Hour IQR"
+                        iqr_label = "dt 1 Hour IQR"
                     elif "2Trig" in construct:
                         iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='tomato', alpha=0.20)
-                        iqr_label = "2Trig IQR"
+                        iqr_label = "dt IQR"
                     elif test_name == 'A280_1hr' and "2Trig" not in construct:
                         iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='cyan', alpha=0.20)
-                        iqr_label = "1Trig 1 Hour IQR"
+                        iqr_label = "st 1 Hour IQR"
                     else:
                         iqr_handle = plt.fill_between(pH_values_display, iqr_lower_bounds, iqr_upper_bounds, color='cyan', alpha=0.20)
-                        iqr_label = "1Trig IQR"
+                        iqr_label = "st IQR"
                     handles_and_labels[iqr_handle] = iqr_label
                     group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
                     legend_groups[f"{group_prefix}_iqr"].append(iqr_handle)
@@ -992,12 +992,12 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 if len(inflection_points_1trig) >= 1:
                     mean_1trig = np.mean(inflection_points_1trig)
                     inflection_1 = plt.axvline(mean_1trig, color=color_1trig, linestyle="--")
-                    inflection_handles_and_labels[inflection_1] = format_inflection_label("1Trig Inflection",mean_1trig)
+                    inflection_handles_and_labels[inflection_1] = format_inflection_label("st Inflection",mean_1trig)
                     legend_groups["group1_inflection"].append(inflection_1)
                 if len(inflection_points_2trig) >= 1:
                     mean_2trig = np.mean(inflection_points_2trig)
                     inflection_2 = plt.axvline(mean_2trig, color=color_2trig, linestyle="--")
-                    inflection_handles_and_labels[inflection_2] = format_inflection_label("2Trig Inflection",mean_2trig)
+                    inflection_handles_and_labels[inflection_2] = format_inflection_label("dt Inflection",mean_2trig)
                     legend_groups["group2_inflection"].append(inflection_2)
                 knockout_inflection_points = (
                     inflection_points_knockout_48hr
