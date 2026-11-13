@@ -173,6 +173,13 @@ def behavior_label_from_behavior_id(behavior_id):
         return "Behavior 2"
     return behavior_id
 
+# This helper function assigns colors to behavior-specific IQR bands.
+def get_behavior_iqr_colors(behavior_ids):
+    return {
+        behavior_id: "blue" if behavior_label_from_behavior_id(behavior_id) == "Behavior 2" else "cyan"
+        for behavior_id in behavior_ids
+    }
+
 # This helper function assigns two unique colors to the data points and 4PL curve for the plots that show the different behaviors. It uses the base color assigned
 # to behavior 1 as a reference for determining behavior 2's color.
 def get_behavior_colors(base_color, behavior_ids):
@@ -585,6 +592,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             if is_special_behavior_plot:
                 behavior_ids_present = sorted([bid for bid in behavior_groups.keys() if bid != ""])
                 behavior_colors = get_behavior_colors(color_map[construct_key], behavior_ids_present)
+                behavior_iqr_colors = get_behavior_iqr_colors(behavior_ids_present)
 
             try:
                 if is_special_behavior_plot:
@@ -608,7 +616,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             continue
                         curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=behavior_colors[behavior_id],linestyle="-")
                         line_handle = curve_handle_list[0]
-                        iqr_handle = plt.fill_between(group_pH,group_iqr_lower,group_iqr_upper,color=behavior_colors[behavior_id],alpha=0.12)
+                        iqr_handle = plt.fill_between(group_pH,group_iqr_lower,group_iqr_upper,color=behavior_iqr_colors[behavior_id],alpha=0.12)
                         handles_and_labels[iqr_handle] = f"{behavior_label_from_behavior_id(behavior_id)} IQR"
                         legend_groups["group1_iqr"].append(iqr_handle)
                         inflection_handle = plt.axvline(inflection_value,color=behavior_colors[behavior_id],linestyle=":")
