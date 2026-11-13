@@ -626,9 +626,10 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=behavior_colors[behavior_id],linestyle="-")
                         line_handle = curve_handle_list[0]
                         if group_stderr_pH:
+                            stderr_color = "cyan" if behavior_id == behavior_ids_present[0] else "blue"
                             stderr_handle = plt.fill_between(
                                 group_stderr_pH, group_stderr_lower, group_stderr_upper,
-                                color=behavior_colors[behavior_id], alpha=0.12)
+                                color=stderr_color, alpha=0.12)
                             handles_and_labels[stderr_handle] = f"{behavior_label_from_behavior_id(behavior_id)} +/- 1 st. err."
                             legend_groups["group1_stderr"].append(stderr_handle)
                         inflection_handle = plt.axvline(inflection_value,color=behavior_colors[behavior_id],linestyle=":")
@@ -1095,7 +1096,7 @@ if __name__ == '__main__':
                 ], plot=True)
             else:
                 statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
-    """
+
     for protein_construct in protein_dict:
         if '2Trig' not in protein_construct and 'Gravity' not in protein_construct and 'Knockout' not in protein_construct:
             # Single-trigger A280 1hr vs 48-72 hr
@@ -1117,4 +1118,3 @@ if __name__ == '__main__':
     statisticize([('10xHis-1TEL-TV-vWA','A280_1hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_1hr')],plot=True)
     # Single-Trigger vs Double-Trigger 1TEL-PA-TNK1.UBA 1 Hour vs. 48 Hour with both behaviors
     statisticize([(f'1TEL-PA-TNK1.UBA','A280_1hr'), (f'2Trig-1TEL-PA-TNK1.UBA','A280_1hr')],plot=True,tailored=True)
-    """
