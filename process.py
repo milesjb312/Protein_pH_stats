@@ -260,8 +260,10 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     behavior_id = protein_dict[protein_construct][bio_rep].get('Behavior ID', '').strip()
                     data['behavior_id'].append(behavior_id)
                     concentration = float(bio_rep.split("_")[1])
-                    theoretical_max_concentration = concentration/5
-
+                    if 'Knockout' in protein_construct and date == '7/17/2026':
+                        theoretical_max_concentration=concentration/3.281
+                    else: 
+                        theoretical_max_concentration = concentration/5
                     # The "if isinstance" and it's associated "else" statement determines whether this data point needs to be omitted from the curve fitting. If it doesn't,
                     # then return False statements for certain labels. If it does need to be omitted, we return True statements that stick with the data point throughout
                     # the rest of the function. It also removes the symbol (*, ^, ~) used to signal that that data point needs to be omitted from curve fitting.
@@ -1093,7 +1095,7 @@ if __name__ == '__main__':
                 ], plot=True)
             else:
                 statisticize([(f'{protein_construct}','A280_1hr'),(f'2Trig-{protein_construct}','A280_1hr')],plot=True)
-
+    """
     for protein_construct in protein_dict:
         if '2Trig' not in protein_construct and 'Gravity' not in protein_construct and 'Knockout' not in protein_construct:
             # Single-trigger A280 1hr vs 48-72 hr
@@ -1108,10 +1110,11 @@ if __name__ == '__main__':
         else:
             # Single-trigger Gravity A280 1hr vs 48-72 hr
             statisticize([(f'{protein_construct}','A280_1hr'),(f'{protein_construct}','A280_48-72hr')],plot=True,tailored=True)
-
+    
     # Single trigger TV-vWA A400, A280 1 HR, A280 48-72 HR, A280 1 HR vs 48-72 HR
     statisticize([('10xHis-1TEL-TV-vWA','A280_48-72hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_48-72hr')],plot=True)
     statisticize([('10xHis-1TEL-TV-vWA','A400'),('10xHis-1TEL-TV-vWA (Gravity)','A400')],plot=True)
     statisticize([('10xHis-1TEL-TV-vWA','A280_1hr'),('10xHis-1TEL-TV-vWA (Gravity)','A280_1hr')],plot=True)
     # Single-Trigger vs Double-Trigger 1TEL-PA-TNK1.UBA 1 Hour vs. 48 Hour with both behaviors
     statisticize([(f'1TEL-PA-TNK1.UBA','A280_1hr'), (f'2Trig-1TEL-PA-TNK1.UBA','A280_1hr')],plot=True,tailored=True)
+    """
