@@ -132,7 +132,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
         elif "Knockout" in construct:
             base_label = "Knockout"
         else:
-            base_label = "2Trig" if is_2trig else "1Trig"
+            base_label = "dt" if is_2trig else "st"
         if is_solubility:
             label = f"{base_label} {time_label_from_test(test_name)}"
         else:
@@ -144,7 +144,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
         elif is_gravity:
             trig_label = "Gravity"
         else:
-            trig_label = "2Trig" if is_2trig else "1Trig"
+            trig_label = "dt" if is_2trig else "st"
         label = f"{trig_label} {time_label_from_test(test_name)}"
     # Case 3: one replicate / one construct / one test
     elif len(protein_constructs) == 1 and len(tests) == 1:
@@ -153,7 +153,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
         elif is_gravity:
             base_label = "Gravity"
         else:
-            base_label = "2Trig" if is_2trig else "1Trig"
+            base_label = "dt" if is_2trig else "st"
         if is_solubility:
             label = f"{base_label} {time_label_from_test(test_name)}"
         else:
@@ -632,7 +632,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                                 color=stderr_color, alpha=0.12)
                             handles_and_labels[stderr_handle] = f"{behavior_label_from_behavior_id(behavior_id)} +/- 1 st. err."
                             legend_groups["group1_stderr"].append(stderr_handle)
-                        inflection_handle = plt.axvline(inflection_value,color=behavior_colors[behavior_id],linestyle=":")
+                        inflection_handle = plt.axvline(inflection_value,color=behavior_colors[behavior_id],linestyle="--")
                         inflection_handles_and_labels[inflection_handle] = (
                             f"{behavior_label_from_behavior_id(behavior_id)} Inflection: "
                             f"{format_inflection_label('', inflection_value).replace(': ', '').strip()}")
@@ -686,19 +686,19 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             stderr_label = f"1Trig {time_label_from_test(test_name)} +/- 1 st. err."
                         elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
                             stderr_handle = plt.fill_between(pH_values_display, stderr_lower_bounds, stderr_upper_bounds, color='mediumpurple', alpha=0.20)
-                            stderr_label = f"2Trig {time_label_from_test(test_name)} +/- 1 st. err."
+                            stderr_label = f"dt {time_label_from_test(test_name)} +/- 1 st. err."
                         elif "2Trig" in construct and test_name == 'A280_1hr':
                             stderr_handle = plt.fill_between(pH_values_display, stderr_lower_bounds, stderr_upper_bounds, color='tomato', alpha=0.20)
-                            stderr_label = "2Trig 1 Hour +/- 1 st. err."
+                            stderr_label = "dt 1 Hour +/- 1 st. err."
                         elif "2Trig" in construct:
                             stderr_handle = plt.fill_between(pH_values_display, stderr_lower_bounds, stderr_upper_bounds, color='tomato', alpha=0.20)
-                            stderr_label = "2Trig +/- 1 st. err."
+                            stderr_label = "dt +/- 1 st. err."
                         elif test_name == 'A280_1hr' and "2Trig" not in construct:
                             stderr_handle = plt.fill_between(pH_values_display, stderr_lower_bounds, stderr_upper_bounds, color='cyan', alpha=0.20)
-                            stderr_label = "1Trig 1 Hour +/- 1 st. err."
+                            stderr_label = "st 1 Hour +/- 1 st. err."
                         else:
                             stderr_handle = plt.fill_between(pH_values_display, stderr_lower_bounds, stderr_upper_bounds, color='cyan', alpha=0.20)
-                            stderr_label = "1Trig +/- 1 st. err."
+                            stderr_label = "st +/- 1 st. err."
                         handles_and_labels[stderr_handle] = stderr_label
                         group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
                         legend_groups[f"{group_prefix}_stderr"].append(stderr_handle)
@@ -1006,12 +1006,12 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 if len(inflection_points_1trig) >= 1:
                     mean_1trig = np.mean(inflection_points_1trig)
                     inflection_1 = plt.axvline(mean_1trig, color=color_1trig, linestyle="--")
-                    inflection_handles_and_labels[inflection_1] = format_inflection_label("1Trig Inflection",mean_1trig)
+                    inflection_handles_and_labels[inflection_1] = format_inflection_label("st Inflection",mean_1trig)
                     legend_groups["group1_inflection"].append(inflection_1)
                 if len(inflection_points_2trig) >= 1:
                     mean_2trig = np.mean(inflection_points_2trig)
                     inflection_2 = plt.axvline(mean_2trig, color=color_2trig, linestyle="--")
-                    inflection_handles_and_labels[inflection_2] = format_inflection_label("2Trig Inflection",mean_2trig)
+                    inflection_handles_and_labels[inflection_2] = format_inflection_label("dt Inflection",mean_2trig)
                     legend_groups["group2_inflection"].append(inflection_2)
                 knockout_inflection_points = (
                     inflection_points_knockout_48hr
