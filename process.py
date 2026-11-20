@@ -378,13 +378,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 display_drops = [item[0] for item in paired]
                 fit_drops = [item[0] for item in fit_paired]
                 if len(display_drops) > 0:
-                    date_means_for_display.append(np.mean(display_drops))
+                    date_means_for_display.append(np.max(display_drops))
                 if len(fit_drops) > 0:
-                    date_means_for_fit.append(np.mean(fit_drops))
+                    date_means_for_fit.append(np.max(fit_drops))
 
             # Create variables that will be displayed on the plot and used for calculating the 95% confidence interval.
             if date_means_for_display:
-                mean_display = np.mean(date_means_for_display)
+                mean_display = np.max(date_means_for_display)
                 constructs_by_pH_by_date[construct][pH]["mean_display"] = mean_display
                 if len(date_means_for_display) > 1:
                     sd_display = np.std(date_means_for_display, ddof=1)
@@ -397,7 +397,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
 
             # Calculate the mean of the data we use to do the curve fitting.
             if date_means_for_fit:
-                constructs_by_pH_by_date[construct][pH]["mean"] = np.mean(date_means_for_fit)
+                constructs_by_pH_by_date[construct][pH]["mean"] = np.max(date_means_for_fit)
     
     # This function returns the 4PL equation that we use to plot the 4PL curve onto the plot. We get the parameters from the "curve_fit" command below.
     def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
@@ -571,13 +571,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         if is_time_comparison:
                             paired = [item for item in paired if not item[3]]
                         if paired:
-                            subgroup_measurements_by_date[behavior_id][date] = np.mean(
+                            subgroup_measurements_by_date[behavior_id][date] = np.max(
                                 [item[0] for item in paired])
                     for behavior_id, date_means in subgroup_measurements_by_date.items():
                         if not date_means:
                             continue
                         vals = np.array(list(date_means.values()), dtype=float)
-                        mean_val = np.mean(vals)
+                        mean_val = np.max(vals)
                         behavior_groups[behavior_id]['pH_values'].append(float(pH))
                         behavior_groups[behavior_id]['means'].append(mean_val)
                         if len(vals) > 1:
@@ -892,7 +892,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
                 plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
                 safe_date_text = date_text.replace("/", "-").replace(", ", "_").replace(" ", "_")
-                plt.savefig(f"{BASE_DIR}/figures_with_stderrs/{construct.replace('/', '_')}_{test_name}_{safe_date_text}_single.png",dpi=300,bbox_inches="tight")
+                plt.savefig(f"{BASE_DIR}/figures_with_maxs_stderrs/{construct.replace('/', '_')}_{test_name}_{safe_date_text}_single.png",dpi=300,bbox_inches="tight")
                 plt.show()
                 plt.close()
                 handles_and_labels = {}
@@ -981,13 +981,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     gravity_label = "Gravity 1 Hour Inflection"
 
                 if len(nongravity_points) >= 1:
-                    mean_ng = np.mean(nongravity_points)
+                    mean_ng = np.max(nongravity_points)
                     inflection_ng = plt.axvline(mean_ng, color=nongravity_color, linestyle="--")
                     inflection_handles_and_labels[inflection_ng] = format_inflection_label(nongravity_label, mean_ng)
                     legend_groups["group1_inflection"].append(inflection_ng)
 
                 if len(gravity_points) >= 1:
-                    mean_g = np.mean(gravity_points)
+                    mean_g = np.max(gravity_points)
                     inflection_g = plt.axvline(mean_g, color=gravity_color, linestyle="--")
                     inflection_handles_and_labels[inflection_g] = format_inflection_label(gravity_label, mean_g)
                     legend_groups["group2_inflection"].append(inflection_g)
@@ -1067,7 +1067,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
             plt.legend(handles, labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
             safe_constructs = "_vs_".join([p.replace("/", "_") for p in protein_constructs])
             safe_tests = "_vs_".join(tests)
-            plt.savefig(f"{BASE_DIR}/figures_with_stderrs/{safe_constructs}__{safe_tests}.png", dpi=300, bbox_inches="tight")
+            plt.savefig(f"{BASE_DIR}/figures_with_maxs_stderrs/{safe_constructs}__{safe_tests}.png", dpi=300, bbox_inches="tight")
             plt.show()
             plt.close()
 
