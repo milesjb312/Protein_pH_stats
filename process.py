@@ -85,7 +85,7 @@ def format_chart_title(construct_name: str,multiplicity: int) -> str:
     elif "PA" in parts:
         linker = "PA"
     elif "SR" in parts:
-        linker = "[sr]"
+        linker = "sr"
     elif "TV" in parts:
         linker = "TV"
     # 4) target protein
@@ -132,7 +132,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
         elif "Knockout" in construct:
             base_label = "Knockout"
         else:
-            base_label = "2Trig" if is_2trig else "1Trig"
+            base_label = "dt" if is_2trig else "st"
         if is_solubility:
             label = f"{base_label} {time_label_from_test(test_name)}"
         else:
@@ -144,7 +144,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
         elif is_gravity:
             trig_label = "Gravity"
         else:
-            trig_label = "2Trig" if is_2trig else "1Trig"
+            trig_label = "dt" if is_2trig else "st"
         label = f"{trig_label} {time_label_from_test(test_name)}"
     # Case 3: one replicate / one construct / one test
     elif len(protein_constructs) == 1 and len(tests) == 1:
@@ -153,7 +153,7 @@ def format_legend_label(construct, test_name, protein_constructs, tests, n):
         elif is_gravity:
             base_label = "Gravity"
         else:
-            base_label = "2Trig" if is_2trig else "1Trig"
+            base_label = "dt" if is_2trig else "st"
         if is_solubility:
             label = f"{base_label} {time_label_from_test(test_name)}"
         else:
@@ -260,7 +260,10 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     behavior_id = protein_dict[protein_construct][bio_rep].get('Behavior ID', '').strip()
                     data['behavior_id'].append(behavior_id)
                     concentration = float(bio_rep.split("_")[1])
-                    theoretical_max_concentration = concentration/5
+                    if 'Knockout' in protein_construct and date == '7/17/2026':
+                        theoretical_max_concentration=concentration/3.281
+                    else: 
+                        theoretical_max_concentration = concentration/5
 
                     # The "if isinstance" and it's associated "else" statement determines whether this data point needs to be omitted from the curve fitting. If it doesn't,
                     # then return False statements for certain labels. If it does need to be omitted, we return True statements that stick with the data point throughout
@@ -282,7 +285,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         value = (theoretical_max_concentration - numeric_replicate) / theoretical_max_concentration
                     # Normalized Absorbance (turbidity plots)
                     else:
-                        value = numeric_replicate * (5/concentration)
+                        value = numeric_replicate/theoretical_max_concentration
                     data['data'].append(value)
                     data['is_starred'].append(is_starred)
                     data['is_single_omitted'].append(is_single_omitted)
@@ -376,13 +379,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 display_drops = [item[0] for item in paired]
                 fit_drops = [item[0] for item in fit_paired]
                 if len(display_drops) > 0:
-                    date_means_for_display.append(np.mean(display_drops))
+                    date_means_for_display.append(np.max(display_drops))
                 if len(fit_drops) > 0:
-                    date_means_for_fit.append(np.mean(fit_drops))
+                    date_means_for_fit.append(np.max(fit_drops))
 
             # Create variables that will be displayed on the plot and used for calculating the 95% confidence interval.
             if date_means_for_display:
-                mean_display = np.mean(date_means_for_display)
+                mean_display = np.max(date_means_for_display)
                 constructs_by_pH_by_date[construct][pH]["mean_display"] = mean_display
                 if len(date_means_for_display) > 1:
                     sd_display = np.std(date_means_for_display, ddof=1)
@@ -394,7 +397,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
 
             # Calculate the mean of the data we use to do the curve fitting.
             if date_means_for_fit:
-                constructs_by_pH_by_date[construct][pH]["mean"] = np.mean(date_means_for_fit)
+                constructs_by_pH_by_date[construct][pH]["mean"] = np.max(date_means_for_fit)
     
     # This function returns the 4PL equation that we use to plot the 4PL curve onto the plot. We get the parameters from the "curve_fit" command below.
     def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
@@ -568,13 +571,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         if is_time_comparison:
                             paired = [item for item in paired if not item[3]]
                         if paired:
-                            subgroup_measurements_by_date[behavior_id][date] = np.mean(
+                            subgroup_measurements_by_date[behavior_id][date] = np.max(
                                 [item[0] for item in paired])
                     for behavior_id, date_means in subgroup_measurements_by_date.items():
                         if not date_means:
                             continue
                         vals = np.array(list(date_means.values()), dtype=float)
-                        mean_val = np.mean(vals)
+                        mean_val = np.max(vals)
                         behavior_groups[behavior_id]['pH_values'].append(float(pH))
                         behavior_groups[behavior_id]['means'].append(mean_val)
                         if len(vals) > 1:
@@ -623,12 +626,13 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=behavior_colors[behavior_id],linestyle="-")
                         line_handle = curve_handle_list[0]
                         if group_ci_pH:
+                            ci_color = "cyan" if behavior_id == behavior_ids_present[0] else "blue"
                             ci_handle = plt.fill_between(
                                 group_ci_pH, group_ci_lower, group_ci_upper,
-                                color=behavior_colors[behavior_id], alpha=0.12)
+                                color=ci_color, alpha=0.12)
                             handles_and_labels[ci_handle] = f"{behavior_label_from_behavior_id(behavior_id)} 95% CI"
                             legend_groups["group1_ci"].append(ci_handle)
-                        inflection_handle = plt.axvline(inflection_value,color=behavior_colors[behavior_id],linestyle=":")
+                        inflection_handle = plt.axvline(inflection_value,color=behavior_colors[behavior_id],linestyle="--")
                         inflection_handles_and_labels[inflection_handle] = (
                             f"{behavior_label_from_behavior_id(behavior_id)} Inflection: "
                             f"{format_inflection_label('', inflection_value).replace(': ', '').strip()}")
@@ -679,22 +683,22 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             ci_label = f"Knockout {time_label + ' ' if time_label else ''}95% CI"
                         elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" not in construct:
                             ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='pink', alpha=0.20)
-                            ci_label = f"1Trig {time_label_from_test(test_name)} 95% CI"
+                            ci_label = f"st {time_label_from_test(test_name)} 95% CI"
                         elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
                             ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='mediumpurple', alpha=0.20)
-                            ci_label = f"2Trig {time_label_from_test(test_name)} 95% CI"
+                            ci_label = f"dt {time_label_from_test(test_name)} 95% CI"
                         elif "2Trig" in construct and test_name == 'A280_1hr':
                             ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
-                            ci_label = "2Trig 1 Hour 95% CI"
+                            ci_label = "dt 1 Hour 95% CI"
                         elif "2Trig" in construct:
                             ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='tomato', alpha=0.20)
-                            ci_label = "2Trig 95% CI"
+                            ci_label = "dt 95% CI"
                         elif test_name == 'A280_1hr' and "2Trig" not in construct:
                             ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
-                            ci_label = "1Trig 1 Hour 95% CI"
+                            ci_label = "st 1 Hour 95% CI"
                         else:
                             ci_handle = plt.fill_between(pH_values_display, ci_lower_bounds, ci_upper_bounds, color='cyan', alpha=0.20)
-                            ci_label = "1Trig 95% CI"
+                            ci_label = "st 95% CI"
                         handles_and_labels[ci_handle] = ci_label
                         group_prefix = classify_legend_group(construct, test_name, protein_constructs, tests)
                         legend_groups[f"{group_prefix}_ci"].append(ci_handle)
@@ -848,7 +852,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     for pH in constructs_by_pH_by_date[construct_key]
                     for d in constructs_by_pH_by_date[construct_key][pH]["dates"]})
                 date_text = replicate_dates[0] if len(replicate_dates) == 1 else ", ".join(replicate_dates)
-                plt.title(f"{format_chart_title(construct,len(protein_constructs))}, {assay}\nReplicate Date: {date_text}",fontsize=14)
+                plt.title(f"{format_chart_title(construct,len(protein_constructs))}\nReplicate Date: {date_text}",fontsize=14)
                 plt.ylabel(y_axis)
                 plt.xlabel("pH")
                 if any_starred_points:
@@ -1002,12 +1006,12 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 if len(inflection_points_1trig) >= 1:
                     mean_1trig = np.mean(inflection_points_1trig)
                     inflection_1 = plt.axvline(mean_1trig, color=color_1trig, linestyle="--")
-                    inflection_handles_and_labels[inflection_1] = format_inflection_label("1Trig Inflection",mean_1trig)
+                    inflection_handles_and_labels[inflection_1] = format_inflection_label("st Inflection",mean_1trig)
                     legend_groups["group1_inflection"].append(inflection_1)
                 if len(inflection_points_2trig) >= 1:
                     mean_2trig = np.mean(inflection_points_2trig)
                     inflection_2 = plt.axvline(mean_2trig, color=color_2trig, linestyle="--")
-                    inflection_handles_and_labels[inflection_2] = format_inflection_label("2Trig Inflection",mean_2trig)
+                    inflection_handles_and_labels[inflection_2] = format_inflection_label("dt Inflection",mean_2trig)
                     legend_groups["group2_inflection"].append(inflection_2)
                 knockout_inflection_points = (
                     inflection_points_knockout_48hr
@@ -1032,14 +1036,14 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                 assay = 'Sedimentation'
             if len(protein_constructs) == 1:
                 protein_title = format_chart_title(protein_constructs[0],len(protein_constructs))
-                plt.title(f"{protein_title}, {assay}", fontsize = 14)
+                plt.title(f"{protein_title}", fontsize = 14)
                 plt.ylabel(y_axis)
                 plt.xlabel("pH")
             else:
                 if (len(protein_constructs) == 2 or is_alone_knockout_comparison) and len(tests) == 1:
                     # Use the first construct as the base protein title
                     protein_title = format_chart_title(protein_constructs[0],len(protein_constructs))
-                    plt.title(f"{protein_title}, {assay}", fontsize = 14)
+                    plt.title(f"{protein_title}", fontsize = 14)
                     plt.ylabel(y_axis)
                     plt.xlabel("pH")
             # add asterisk legend entry LAST so it appears on bottom row
