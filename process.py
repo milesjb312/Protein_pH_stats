@@ -683,7 +683,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             stderr_label = f"Knockout {time_label + ' ' if time_label else ''} +/- 1 st. err."
                         elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" not in construct:
                             stderr_handle = plt.fill_between(pH_values_display, stderr_lower_bounds, stderr_upper_bounds, color='pink', alpha=0.20)
-                            stderr_label = f"1Trig {time_label_from_test(test_name)} +/- 1 st. err."
+                            stderr_label = f"st {time_label_from_test(test_name)} +/- 1 st. err."
                         elif test_name in ["A280_48hr", "A280_72hr"] and "2Trig" in construct:
                             stderr_handle = plt.fill_between(pH_values_display, stderr_lower_bounds, stderr_upper_bounds, color='mediumpurple', alpha=0.20)
                             stderr_label = f"dt {time_label_from_test(test_name)} +/- 1 st. err."
