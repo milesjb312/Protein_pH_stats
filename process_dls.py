@@ -96,7 +96,7 @@ def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'Ti
                 Z_avgs_in_range, jittered_pHs_in_range = map(list, zip(*Z_avgs_in_range_paired))
                 plt.scatter(jittered_pHs_in_range, Z_avgs_in_range, marker='o', color=master_PdI_colors[PdI_range], alpha=0.5)
         else:
-                plt.scatter(pHs, Z_avgs, marker='o', color=color, alpha=0.2)
+                plt.scatter(jittered_pHs, Z_avgs, marker='o', color=color, alpha=0.2)
         plt.xlabel(f'pH')
         plt.ylabel(f'Z Average')
         #print(f'np.std(Z_avgs):{np.std(Z_avgs)}')
