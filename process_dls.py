@@ -121,5 +121,7 @@ def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'Ti
 
 statisticize(['dt-1TEL-GG-TNK1.UBA','st-1TEL-GG-TNK1.UBA'],name='1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False)
 statisticize(['dt-1TEL-sr-TNK1.UBA','st-1TEL-sr-TNK1.UBA'],name='1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False)
-statisticize(['dt-1TEL-GG-TNK1.UBA','st-1TEL-GG-TNK1.UBA'],name='1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
-statisticize(['dt-1TEL-sr-TNK1.UBA','st-1TEL-sr-TNK1.UBA'],name='1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
+statisticize(['st-1TEL-GG-TNK1.UBA'],name='st-1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
+statisticize(['st-1TEL-sr-TNK1.UBA'],name='st-1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
+statisticize(['dt-1TEL-GG-TNK1.UBA'],name='dt-1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
+statisticize(['dt-1TEL-sr-TNK1.UBA'],name='dt-1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')

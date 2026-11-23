@@ -629,7 +629,7 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                             stderr_color = "cyan" if behavior_id == behavior_ids_present[0] else "blue"
                             stderr_handle = plt.fill_between(
                                 group_stderr_pH, group_stderr_lower, group_stderr_upper,
-                                color=stderr_color, alpha=0.12)
+                                color=stderr_color, alpha=0.20)
                             handles_and_labels[stderr_handle] = f"{behavior_label_from_behavior_id(behavior_id)} +/- 1 st. err."
                             legend_groups["group1_stderr"].append(stderr_handle)
                         inflection_handle = plt.axvline(inflection_value,color=behavior_colors[behavior_id],linestyle="--")
