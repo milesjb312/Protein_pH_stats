@@ -20,7 +20,7 @@ with open(CSV_PATH, newline="", encoding="utf-8-sig") as csvfile:
     reader = csv.DictReader(csvfile)
     for row in reader:
         protein_construct = row['Protein'].strip()
-        time = row['Time'].strip()
+        time = float(row['Time'].strip())
         pH = float(row['pH'].strip())
         Z_avg = float(row['Z Avg'].strip())
         PdI = float(row['PdI'].strip())
@@ -43,81 +43,125 @@ def shade_list(cmap, n, lo=0.25, hi=0.9):
 blue_shades = shade_list(plt.cm.Blues, 1)
 orange_shades = shade_list(plt.cm.Oranges, 1)
 
-def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'Time',PdI_cutoff:float = 0.0,averaging:bool = False):
+def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'None',PdI_cutoff:float = 0.0,averaging:bool = False):
     handles = []
     ylims = []
-    if control_variable == 'time':
-        pass
     for protein in protein_list:
         if 'dt' in protein:
             color = orange_shades[0]
         else:
             color = blue_shades[0]
         pH_linspace = np.linspace(4.0, 9.0, 400)
-        paired_z_p_p = [(Z_avg,pH,PdI) for Z_avg, pH, PdI in zip(master_protein_dict[protein]['Z_avg'],master_protein_dict[protein]['pH'],master_protein_dict[protein]['PdI']) if PdI<PdI_cutoff]
-        #print(f'paired_z_p_p:{paired_z_p_p}')
-        Z_avgs, pHs, PdIs = map(list, zip(*paired_z_p_p))
+        paired_z_p_p_t = [(Z_avg,pH,PdI,time) for Z_avg, pH, PdI, time in zip(master_protein_dict[protein]['Z_avg'],master_protein_dict[protein]['pH'],master_protein_dict[protein]['PdI'],master_protein_dict[protein]['time']) if PdI<PdI_cutoff]
+        #print(f'paired_z_p_p:{paired_z_p_p_t}')
+        Z_avgs, pHs, PdIs, times = map(list, zip(*paired_z_p_p_t))
         Z_avgs_avgs = []
         pHs_avgs_per_Z_avg = []
-        lower_ses = []
-        upper_ses = []
-        for pH in master_pHs:
-            #if averaging
-            zs = []
-            for pair in paired_z_p_p:
-                if pair[1]==pH:
-                    zs.append(pair[0])
-            #standard errors per point
-            sd = np.std(zs, ddof=1)
-            td = t.ppf(0.975, df=6 - 1)
-            error = sd * td
-            lower_ses.append(np.mean(zs) - error)
-            upper_ses.append(np.mean(zs) + error)
-            Z_avgs_avgs.append(np.mean(zs))
-            pHs_avgs_per_Z_avg.append(pH)
-        #print(f'Z_avgs_avgs: {Z_avgs_avgs}')
-        def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
-            return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
-        initial_guesses = [max(Z_avgs), -4, 5.5, min(Z_avgs)]
-        try:                
-            best_fit_parameters, _ = None,None
-            if averaging:
-                best_fit_parameters, _ = curve_fit(pH_to_absorbance_model_4pl,pHs_avgs_per_Z_avg,Z_avgs_avgs,p0=initial_guesses)
-            else:
-                best_fit_parameters, _ = curve_fit(pH_to_absorbance_model_4pl,pHs,Z_avgs,p0=initial_guesses)
-            inflection_value = round(best_fit_parameters[2],1)
-            print(f'Inflection point for {protein}: {inflection_value}')
-            axvline_handle = plt.axvline(inflection_value, color=color, linestyle="--")
-            handles.append(axvline_handle)
-            plot_handle = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=color,linestyle="-")
-            handles.append(plot_handle)
-        except Exception as e:
-            print(e)
         jittered_pHs = np.array(pHs) + np.random.uniform(-jitter_strength, jitter_strength,len(pHs))
-        if control_variable=='PdI_range':
-            for PdI_range in range(len(master_PdI_ranges)-1):
-                Z_avgs_in_range_paired = [(Z_avg, jittered_pH) for Z_avg, jittered_pH, PdI in zip(Z_avgs,jittered_pHs, PdIs) if master_PdI_ranges[PdI_range]<PdI<master_PdI_ranges[PdI_range+1]]
-                Z_avgs_in_range, jittered_pHs_in_range = map(list, zip(*Z_avgs_in_range_paired))
-                scatter_handle = plt.scatter(jittered_pHs_in_range, Z_avgs_in_range, marker='o', color=master_PdI_colors[PdI_range], alpha=0.5)
-                handles.append(scatter_handle)
-        else:
+        if control_variable!='time':
+            lower_ses = []
+            upper_ses = []
+            for pH in master_pHs:
+                #if averaging
+                zs = []
+                for pair in paired_z_p_p_t:
+                    if pair[1]==pH:
+                        zs.append(pair[0])
+                #standard errors per point
+                sd = np.std(zs, ddof=1)
+                td = t.ppf(0.975, df=6 - 1)
+                error = sd * td
+                lower_ses.append(np.mean(zs) - error)
+                upper_ses.append(np.mean(zs) + error)
+                Z_avgs_avgs.append(np.mean(zs))
+                pHs_avgs_per_Z_avg.append(pH)
+            #print(f'Z_avgs_avgs: {Z_avgs_avgs}')
+            def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
+                return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
+            initial_guesses = [max(Z_avgs), -4, 5.5, min(Z_avgs)]
+            try:                
+                best_fit_parameters, _ = None,None
+                if averaging:
+                    best_fit_parameters, _ = curve_fit(pH_to_absorbance_model_4pl,pHs_avgs_per_Z_avg,Z_avgs_avgs,p0=initial_guesses)    
+                else:
+                    best_fit_parameters, _ = curve_fit(pH_to_absorbance_model_4pl,pHs,Z_avgs,p0=initial_guesses)
+                inflection_value = round(best_fit_parameters[2],1)
+                print(f'Inflection point for {protein}: {inflection_value}')
+                axvline_handle = plt.axvline(inflection_value, color=color, linestyle="--")
+                handles.append(axvline_handle)
+                plot_handle = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=color,linestyle="-")
+                handles.append(plot_handle)
+            except Exception as e:
+                print(e)
+            if control_variable=='PdI_range':
+                for PdI_range in range(len(master_PdI_ranges)-1):
+                    Z_avgs_in_range_paired = [(Z_avg, jittered_pH) for Z_avg, jittered_pH, PdI in zip(Z_avgs,jittered_pHs, PdIs) if master_PdI_ranges[PdI_range]<PdI<master_PdI_ranges[PdI_range+1]]
+                    Z_avgs_in_range, jittered_pHs_in_range = map(list, zip(*Z_avgs_in_range_paired))
+                    scatter_handle = plt.scatter(jittered_pHs_in_range, Z_avgs_in_range, marker='o', color=master_PdI_colors[PdI_range], alpha=0.5)
+                    handles.append(scatter_handle)            
+            else:
+                    scatter_handle = plt.scatter(jittered_pHs, Z_avgs, marker='o', color=color, alpha=0.2)
+                    handles.append(scatter_handle)
+            plt.xlabel(f'pH')
+            plt.ylabel(f'Z Average')
+            #print(f'np.std(Z_avgs):{np.std(Z_avgs)}')
+            #plt.fill_between(master_pHs,lower_ses, upper_ses,color=color, alpha=0.12)
+            z_avgs_minus_outliers = [Z_avg for Z_avg in Z_avgs if (np.mean(Z_avgs)-3*np.std(Z_avgs))<Z_avg<(np.mean(Z_avgs)+3*np.std(Z_avgs))]
+            ylims.append(np.max(z_avgs_minus_outliers)+200)
+            ylims.append(np.min(z_avgs_minus_outliers)-200)
+            if control_variable=='PdI_range':
+                plt.ylim(top=max(ylims))
+                plt.ylim(bottom=min(ylims))
+                plt.title(f'{name}')
+                plt.savefig(f"{BASE_DIR}/dls_figures/PdI_ranges_{name}.png",dpi=300,bbox_inches="tight")
+                plt.show()
+                plt.close()
+                return
+        elif control_variable=='time':
+            Z_avgs_time_one = [(Z_avg, pH) for Z_avg, pH, time in zip(Z_avgs,pHs,times) if time in [0.1,0.2,0.3]]
+            Z_avgs_time_two = [(Z_avg, pH) for Z_avg, pH, time in zip(Z_avgs,pHs,times) if time in [10.1,10.2,10.3]]
+            times = [Z_avgs_time_one,Z_avgs_time_two]
+            for time in range(len(times)):
+                lower_ses = []
+                upper_ses = []
+                for pH in master_pHs:
+                    zs = []
+                    for pair in times[time]:
+                        if pair[1]==pH:
+                            zs.append(pair[0])
+                    #standard errors per point
+                    sd = np.std(zs, ddof=1)
+                    td = t.ppf(0.975, df=6 - 1)
+                    error = sd * td
+                    lower_ses.append(np.mean(zs) - error)
+                    upper_ses.append(np.mean(zs) + error)
+                def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
+                    return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
+                initial_guesses = [max(Z_avgs), -4, 5.5, min(Z_avgs)]
+                try:                
+                    best_fit_parameters, _ = None,None
+                    if averaging:
+                        best_fit_parameters, _ = curve_fit(pH_to_absorbance_model_4pl,pHs_avgs_per_Z_avg,Z_avgs_avgs,p0=initial_guesses)    
+                    else:
+                        best_fit_parameters, _ = curve_fit(pH_to_absorbance_model_4pl,pHs,Z_avgs,p0=initial_guesses)
+                    inflection_value = round(best_fit_parameters[2],1)
+                    print(f'Inflection point for {protein}: {inflection_value}')
+                    axvline_handle = plt.axvline(inflection_value, color=color, linestyle="--")
+                    handles.append(axvline_handle)
+                    plot_handle = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=color,linestyle="-")
+                    handles.append(plot_handle)
+                except Exception as e:
+                    print(e)
+                jittered_pHs = np.array(pHs) + np.random.uniform(-jitter_strength, jitter_strength,len(pHs))
                 scatter_handle = plt.scatter(jittered_pHs, Z_avgs, marker='o', color=color, alpha=0.2)
                 handles.append(scatter_handle)
-        plt.xlabel(f'pH')
-        plt.ylabel(f'Z Average')
-        #print(f'np.std(Z_avgs):{np.std(Z_avgs)}')
-        #plt.fill_between(master_pHs,lower_ses, upper_ses,color=color, alpha=0.12)
-        z_avgs_minus_outliers = [Z_avg for Z_avg in Z_avgs if (np.mean(Z_avgs)-3*np.std(Z_avgs))<Z_avg<(np.mean(Z_avgs)+3*np.std(Z_avgs))]
-        ylims.append(np.max(z_avgs_minus_outliers)+200)
-        ylims.append(np.min(z_avgs_minus_outliers)-200)
-        if control_variable=='PdI_range':
-            plt.ylim(top=max(ylims))
-            plt.ylim(bottom=min(ylims))
-            plt.title(f'{name}')
-            plt.savefig(f"{BASE_DIR}/dls_figures/PdI_ranges_{name}.png",dpi=300,bbox_inches="tight")
-            plt.show()
-            plt.close()
-            return            
+                plt.xlabel(f'pH')
+                plt.ylabel(f'Z Average')
+                print(f'np.std(Z_avgs):{np.std(Z_avgs)}')
+                plt.fill_between(master_pHs,lower_ses, upper_ses,color=color, alpha=0.12)
+                z_avgs_minus_outliers = [Z_avg for Z_avg in Z_avgs if (np.mean(Z_avgs)-3*np.std(Z_avgs))<Z_avg<(np.mean(Z_avgs)+3*np.std(Z_avgs))]
+                ylims.append(np.max(z_avgs_minus_outliers)+200)
+                ylims.append(np.min(z_avgs_minus_outliers)-200)
     plt.ylim(top=max(ylims))
     plt.ylim(bottom=min(ylims))
     plt.title(f'{name}')
@@ -126,9 +170,13 @@ def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'Ti
     plt.show()
     plt.close()
 
-statisticize(['dt-1TEL-GG-TNK1.UBA','st-1TEL-GG-TNK1.UBA'],name='1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False)
-statisticize(['dt-1TEL-sr-TNK1.UBA','st-1TEL-sr-TNK1.UBA'],name='1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False)
-statisticize(['st-1TEL-GG-TNK1.UBA'],name='st-1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
-statisticize(['st-1TEL-sr-TNK1.UBA'],name='st-1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
-statisticize(['dt-1TEL-GG-TNK1.UBA'],name='dt-1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
-statisticize(['dt-1TEL-sr-TNK1.UBA'],name='dt-1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
+#statisticize(['dt-1TEL-GG-TNK1.UBA','st-1TEL-GG-TNK1.UBA'],name='1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False)
+#statisticize(['dt-1TEL-sr-TNK1.UBA','st-1TEL-sr-TNK1.UBA'],name='1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False)
+#statisticize(['st-1TEL-GG-TNK1.UBA'],name='st-1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
+#statisticize(['st-1TEL-sr-TNK1.UBA'],name='st-1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
+#statisticize(['dt-1TEL-GG-TNK1.UBA'],name='dt-1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
+#statisticize(['dt-1TEL-sr-TNK1.UBA'],name='dt-1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='PdI_range')
+statisticize(['st-1TEL-GG-TNK1.UBA'],name='st-1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='time')
+statisticize(['st-1TEL-sr-TNK1.UBA'],name='st-1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='time')
+statisticize(['dt-1TEL-GG-TNK1.UBA'],name='dt-1TEL-GG-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='time')
+statisticize(['dt-1TEL-sr-TNK1.UBA'],name='dt-1TEL-sr-TNK1.UBA',PdI_cutoff=0.8,averaging=False,control_variable='time')
