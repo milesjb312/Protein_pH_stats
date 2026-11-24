@@ -623,6 +623,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                         inflection_value = round(best_fit_parameters[2],1)
                         if inflection_value <= 4.0:
                             continue
+                        else:
+                            print(f'Inflection for {construct_key}, {test_name}: {inflection_value}')
                         curve_handle_list = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=behavior_colors[behavior_id],linestyle="-")
                         line_handle = curve_handle_list[0]
                         if group_stderr_pH:
@@ -645,6 +647,8 @@ def statisticize(proteins_and_tests:list,plot_singly=False,plot=False,tailored=F
                     inflection_value = round(best_fit_parameters[2],1)
                     if inflection_value <= 4.0:
                         raise ValueError(f"Calculated inflection point ({inflection_value:.1f}) is <= 4.0")
+                    else:
+                        print(f'Inflection for {construct_key}, {test_name}: {inflection_value}')
                     if "Knockout" in construct:
                         if test_name in ["A280_48hr", "A280_72hr"]:
                             inflection_points_knockout_48hr.append(inflection_value)

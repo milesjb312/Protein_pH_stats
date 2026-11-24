@@ -44,6 +44,7 @@ blue_shades = shade_list(plt.cm.Blues, 1)
 orange_shades = shade_list(plt.cm.Oranges, 1)
 
 def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'Time',PdI_cutoff:float = 0.0,averaging:bool = False):
+    handles = []
     ylims = []
     if control_variable == 'time':
         pass
@@ -54,7 +55,7 @@ def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'Ti
             color = blue_shades[0]
         pH_linspace = np.linspace(4.0, 9.0, 400)
         paired_z_p_p = [(Z_avg,pH,PdI) for Z_avg, pH, PdI in zip(master_protein_dict[protein]['Z_avg'],master_protein_dict[protein]['pH'],master_protein_dict[protein]['PdI']) if PdI<PdI_cutoff]
-        print(f'paired_z_p_p:{paired_z_p_p}')
+        #print(f'paired_z_p_p:{paired_z_p_p}')
         Z_avgs, pHs, PdIs = map(list, zip(*paired_z_p_p))
         Z_avgs_avgs = []
         pHs_avgs_per_Z_avg = []
@@ -74,7 +75,7 @@ def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'Ti
             upper_ses.append(np.mean(zs) + error)
             Z_avgs_avgs.append(np.mean(zs))
             pHs_avgs_per_Z_avg.append(pH)
-        print(f'Z_avgs_avgs: {Z_avgs_avgs}')
+        #print(f'Z_avgs_avgs: {Z_avgs_avgs}')
         def pH_to_absorbance_model_4pl(pH,upper_asymptote,Hill_slope,inflection_point,lower_asymptote):
             return lower_asymptote + (upper_asymptote - lower_asymptote) / (1 + (pH / inflection_point)**Hill_slope)
         initial_guesses = [max(Z_avgs), -4, 5.5, min(Z_avgs)]
@@ -85,8 +86,11 @@ def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'Ti
             else:
                 best_fit_parameters, _ = curve_fit(pH_to_absorbance_model_4pl,pHs,Z_avgs,p0=initial_guesses)
             inflection_value = round(best_fit_parameters[2],1)
-            plt.axvline(inflection_value, color=color, linestyle="--")
-            plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=color,linestyle="-")
+            print(f'Inflection point for {protein}: {inflection_value}')
+            axvline_handle = plt.axvline(inflection_value, color=color, linestyle="--")
+            handles.append(axvline_handle)
+            plot_handle = plt.plot(pH_linspace,pH_to_absorbance_model_4pl(pH_linspace, *best_fit_parameters),color=color,linestyle="-")
+            handles.append(plot_handle)
         except Exception as e:
             print(e)
         jittered_pHs = np.array(pHs) + np.random.uniform(-jitter_strength, jitter_strength,len(pHs))
@@ -94,9 +98,11 @@ def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'Ti
             for PdI_range in range(len(master_PdI_ranges)-1):
                 Z_avgs_in_range_paired = [(Z_avg, jittered_pH) for Z_avg, jittered_pH, PdI in zip(Z_avgs,jittered_pHs, PdIs) if master_PdI_ranges[PdI_range]<PdI<master_PdI_ranges[PdI_range+1]]
                 Z_avgs_in_range, jittered_pHs_in_range = map(list, zip(*Z_avgs_in_range_paired))
-                plt.scatter(jittered_pHs_in_range, Z_avgs_in_range, marker='o', color=master_PdI_colors[PdI_range], alpha=0.5)
+                scatter_handle = plt.scatter(jittered_pHs_in_range, Z_avgs_in_range, marker='o', color=master_PdI_colors[PdI_range], alpha=0.5)
+                handles.append(scatter_handle)
         else:
-                plt.scatter(jittered_pHs, Z_avgs, marker='o', color=color, alpha=0.2)
+                scatter_handle = plt.scatter(jittered_pHs, Z_avgs, marker='o', color=color, alpha=0.2)
+                handles.append(scatter_handle)
         plt.xlabel(f'pH')
         plt.ylabel(f'Z Average')
         #print(f'np.std(Z_avgs):{np.std(Z_avgs)}')
@@ -115,6 +121,7 @@ def statisticize(protein_list:list,name:str = 'none', control_variable:str = 'Ti
     plt.ylim(top=max(ylims))
     plt.ylim(bottom=min(ylims))
     plt.title(f'{name}')
+    #plt.legend(handles,labels,handler_map={tuple: HandlerTuple(ndivide=2, pad=1)},loc="upper right")
     plt.savefig(f"{BASE_DIR}/dls_figures/{name}.png",dpi=300,bbox_inches="tight")
     plt.show()
     plt.close()
